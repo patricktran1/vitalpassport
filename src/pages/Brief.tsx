@@ -8,14 +8,14 @@ import { useVital } from '../context/VitalContext'
 import { medications, patient, sources, timeline } from '../data/demo'
 
 export function Brief() {
-  const { answers, openSource, readiness, openGapCount, resolvedCount } = useVital()
+  const { answers, openSource, readiness, openGapCount, resolvedCount, reviewGaps } = useVital()
   const [shareOpen,setShareOpen]=useState(false)
   const [qrOpen,setQrOpen]=useState(false)
   const [copied,setCopied]=useState(false)
   const shareUrl='https://vitalpassport.com/s/demo-maria-72h'
   const priorities=(answers.priorities || 'Could my medication be contributing to the dizziness? Do I need additional testing? What symptoms should make me seek urgent care?').split(/\n|\?\s+/).filter(Boolean).map((p)=>p.trim()+(p.trim().endsWith('?')?'':'?')).slice(0,3)
   const selectedTimeline=timeline.filter(t=>['t1','t2','t3','t4','t6','t7'].includes(t.id))
-  const conflictResolved=Boolean(answers.dose)
+  const conflictResolved=Boolean(reviewGaps.find((gap)=>gap.key==='dose')?.resolved)
   const timingContext=answers.timing ? ` Patient reports the dizziness began ${answers.timing.toLowerCase()}.` : ''
   const positionalContext=answers.positional ? ` Standing trigger: ${answers.positional.toLowerCase()}.` : ''
 
@@ -62,7 +62,7 @@ export function Brief() {
       <section className="brief-section full"><div className="brief-section-label">Relevant timeline</div><div className="brief-timeline">{selectedTimeline.map(event=>{const source=sources.find(s=>s.id===event.sourceId);return <div key={event.id}><time>{event.displayDate}</time><span/><div><strong>{event.title}</strong><p>{event.summary}</p>{source&&<button className="source-link" onClick={()=>openSource(source)}>View source <ChevronRight size={13}/></button>}</div></div>})}</div></section>
 
       <div className="brief-columns lower">
-        <section className="brief-section"><div className="brief-section-label">Current medications</div><div className="brief-med-list">{medications.map(m=>{const status=m.name.toLowerCase().includes('metoprolol')&&conflictResolved?'verified':m.status;return <button key={m.name} onClick={()=>openSource(sources.find(s=>s.id===m.sourceId) || sources[0])}><div><strong>{m.name}</strong><span>{m.name.toLowerCase().includes('metoprolol')&&answers.dose?answers.dose:`${m.dose} · ${m.frequency}`}</span></div><StatusBadge type={status==='conflict'?'conflict':'verified'} label={status==='conflict'?'Conflict':'Verified'}/></button>})}</div></section>
+        <section className="brief-section"><div className="brief-section-label">Current medications</div><div className="brief-med-list">{medications.map(m=>{const status=m.name.toLowerCase().includes('metoprolol')&&conflictResolved?'verified':m.status;return <button key={m.name} onClick={()=>openSource(sources.find(s=>s.id===m.sourceId) || sources[0])}><div><strong>{m.name}</strong><span>{m.name.toLowerCase().includes('metoprolol')&&conflictResolved?answers.dose:`${m.dose} · ${m.frequency}`}</span></div><StatusBadge type={status==='conflict'?'conflict':'verified'} label={status==='conflict'?'Conflict':'Verified'}/></button>})}</div></section>
         <section className="brief-section"><div className="brief-section-label">Relevant results</div><div className="result-grid"><button onClick={()=>openSource(sources[2])}><span>Hemoglobin</span><strong>10.8</strong><small>g/dL · Low</small></button><button onClick={()=>openSource(sources[2])}><span>Glucose</span><strong>168</strong><small>mg/dL · High</small></button><button onClick={()=>openSource(sources[4])}><span>Lowest home BP</span><strong>104/66</strong><small>Jul 12 · 8:10 AM</small></button></div></section>
       </div>
 
