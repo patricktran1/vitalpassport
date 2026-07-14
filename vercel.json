@@ -4,7 +4,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/extract.ts": {
+    "api/extract.js": {
       "maxDuration": 60
     }
   },
