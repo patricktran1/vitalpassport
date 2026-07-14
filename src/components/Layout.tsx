@@ -1,9 +1,10 @@
-import { CalendarDays, ClipboardList, FileHeart, Home, Menu, PlusCircle, ShieldCheck, X } from 'lucide-react'
+import { CalendarDays, ClipboardList, FileHeart, Home, Menu, PlusCircle, RotateCcw, ShieldCheck, X } from 'lucide-react'
 import { useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { patient } from '../data/demo'
+import { useVital } from '../context/VitalContext'
 import { Logo } from './Logo'
 import { SourceDrawer } from './SourceDrawer'
-import { patient } from '../data/demo'
 
 const navItems = [
   { to: '/', label: 'Today', icon: Home },
@@ -15,6 +16,14 @@ const navItems = [
 
 export function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const navigate = useNavigate()
+  const { resetDemo } = useVital()
+
+  const handleReset = () => {
+    resetDemo()
+    setMobileOpen(false)
+    navigate('/')
+  }
 
   return (
     <div className="app-shell">
@@ -32,6 +41,11 @@ export function Layout() {
             </NavLink>
           ))}
         </nav>
+
+        <button className="demo-reset" onClick={handleReset}>
+          <RotateCcw size={16} />
+          <span><strong>Reset demo</strong><small>Return Maria to the starting state</small></span>
+        </button>
 
         <div className="sidebar-trust">
           <ShieldCheck size={18} />

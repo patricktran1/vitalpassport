@@ -1,13 +1,14 @@
-import { ArrowRight, CalendarClock, CheckCircle2, ChevronRight, FileText, HeartPulse, Pill, Sparkles, TestTube2 } from 'lucide-react'
+import { ArrowRight, CalendarClock, CheckCircle2, ChevronRight, CircleCheck, CircleDashed, FileText, HeartPulse, Pill, ScanSearch, Sparkles, TestTube2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { ProgressRing } from '../components/ProgressRing'
-import { patient, timeline } from '../data/demo'
 import { useVital } from '../context/VitalContext'
+import { patient, timeline } from '../data/demo'
 
 const uploadIcons = { medication: Pill, document: FileText, lab: TestTube2, voice: FileText, symptom: HeartPulse, question: FileText, photo: FileText }
 
 export function Dashboard() {
-  const { readiness, uploads } = useVital()
+  const { readiness, uploads, reviewGaps, openGapCount, resolvedCount } = useVital()
+
   return (
     <div className="page dashboard-page">
       <section className="page-heading split-heading">
@@ -21,13 +22,37 @@ export function Dashboard() {
           <h2>Primary care with Dr. Jordan Kim</h2>
           <p>Saturday, July 18 · 10:30 AM<br/>Bayview Medical Group · Oakland</p>
           <div className="hero-actions">
-            <Link to="/prepare" className="button primary">Prepare for my visit <ArrowRight size={17}/></Link>
+            <Link to="/prepare" className="button primary">{openGapCount ? 'Continue visit preparation' : 'Review completed brief'} <ArrowRight size={17}/></Link>
             <Link to="/brief" className="button light">Preview clinician brief</Link>
           </div>
         </div>
         <div className="readiness-panel">
           <ProgressRing value={readiness}/>
-          <div><strong>Your visit brief is taking shape</strong><span>Three details still need your confirmation.</span></div>
+          <div><strong>{openGapCount ? 'Your visit brief is taking shape' : 'Your visit brief is ready'}</strong><span>{openGapCount ? `${openGapCount} important ${openGapCount === 1 ? 'detail still needs' : 'details still need'} your confirmation.` : 'All four patient-confirmed details are complete.'}</span></div>
+        </div>
+      </section>
+
+      <section className="agent-review-card">
+        <div className="agent-review-intro">
+          <span className="agent-review-icon"><ScanSearch size={22}/></span>
+          <div>
+            <div className="eyebrow">Agent review</div>
+            <h2>Vital Passport compared Maria’s records and found four details worth resolving.</h2>
+            <p>Each finding connects back to the source material. Nothing is silently guessed or overwritten.</p>
+          </div>
+          <div className="agent-review-score"><strong>{resolvedCount}/4</strong><span>confirmed</span></div>
+        </div>
+        <div className="review-gap-grid">
+          {reviewGaps.map((gap) => (
+            <div className={`review-gap ${gap.resolved ? 'resolved' : 'open'}`} key={gap.key}>
+              {gap.resolved ? <CircleCheck size={18}/> : <CircleDashed size={18}/>} 
+              <div><strong>{gap.label}</strong><p>{gap.detail}</p><span>{gap.source}</span></div>
+            </div>
+          ))}
+        </div>
+        <div className="agent-review-action">
+          <span>{openGapCount ? `Resolve ${openGapCount} remaining ${openGapCount === 1 ? 'gap' : 'gaps'} in a guided interview.` : 'The patient-confirmed story is ready for clinician review.'}</span>
+          <Link to={openGapCount ? '/prepare' : '/brief'} className="button primary">{openGapCount ? 'Review findings' : 'Open clinician brief'} <ChevronRight size={16}/></Link>
         </div>
       </section>
 
@@ -38,7 +63,7 @@ export function Dashboard() {
           <div className="finding-list">
             <div><CheckCircle2 size={17}/><span>Urgent care summary added</span></div>
             <div><CheckCircle2 size={17}/><span>Lab report reviewed</span></div>
-            <div className="attention"><Sparkles size={17}/><span>Metoprolol dose needs confirmation</span></div>
+            <div className={reviewGaps.find((gap) => gap.key === 'dose')?.resolved ? '' : 'attention'}><Sparkles size={17}/><span>{reviewGaps.find((gap) => gap.key === 'dose')?.resolved ? 'Metoprolol dose confirmed by patient' : 'Metoprolol dose needs confirmation'}</span></div>
           </div>
           <Link to="/prepare" className="text-link">Continue preparation <ChevronRight size={16}/></Link>
         </section>
