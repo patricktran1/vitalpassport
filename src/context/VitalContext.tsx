@@ -44,6 +44,12 @@ function readSession<T>(key: string, fallback: T): T {
   }
 }
 
+function isResolvedAnswer(key: keyof InterviewAnswers, value: string) {
+  if (!value || value === 'I’m not sure') return false
+  if (key === 'dose' && value === 'I take it differently') return false
+  return true
+}
+
 export function VitalProvider({ children }: { children: ReactNode }) {
   const [answers, setAnswers] = useState<InterviewAnswers>(() => readSession('vital-answers', defaultAnswers))
   const [uploads, setUploads] = useState<UploadItem[]>(() => readSession('vital-uploads', seedUploads))
@@ -72,28 +78,28 @@ export function VitalProvider({ children }: { children: ReactNode }) {
         label: 'Symptom timing',
         detail: answers.timing || 'Clarify whether symptoms started before or after the dose change.',
         source: 'Voice note + medication history',
-        resolved: Boolean(answers.timing),
+        resolved: isResolvedAnswer('timing', answers.timing),
       },
       {
         key: 'positional',
         label: 'Trigger pattern',
         detail: answers.positional || 'Confirm whether standing up reliably triggers the dizziness.',
         source: 'Home blood pressure + symptom note',
-        resolved: Boolean(answers.positional),
+        resolved: isResolvedAnswer('positional', answers.positional),
       },
       {
         key: 'dose',
         label: 'Metoprolol dose',
-        detail: answers.dose ? `Patient confirmed: ${answers.dose}` : 'Bottle photo and urgent-care summary list different instructions.',
+        detail: isResolvedAnswer('dose', answers.dose) ? `Patient confirmed: ${answers.dose}` : answers.dose ? `Patient response: ${answers.dose}. Further clarification is still needed.` : 'Bottle photo and urgent-care summary list different instructions.',
         source: '2 conflicting sources',
-        resolved: Boolean(answers.dose),
+        resolved: isResolvedAnswer('dose', answers.dose),
       },
       {
         key: 'priorities',
         label: 'Patient priorities',
         detail: answers.priorities || 'Capture the questions Maria most wants answered during the visit.',
         source: 'Patient interview',
-        resolved: Boolean(answers.priorities),
+        resolved: isResolvedAnswer('priorities', answers.priorities),
       },
     ],
     [answers],
