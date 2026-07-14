@@ -41,7 +41,7 @@ If the model identifier shown in your Nebius catalog differs, add:
 NEBIUS_MODEL=the_exact_model_identifier
 ```
 
-Redeploy after changing environment variables. The key is read only by the Vercel function in `api/extract.ts` and is never exposed to the browser.
+Redeploy after changing environment variables. The key is read only by the Vercel function in `api/extract.js` and is never exposed to the browser.
 
 ## Extraction flow
 
@@ -69,12 +69,7 @@ Open `http://localhost:5173`.
 npm run check
 npm run build
 npm run preview
-```
-
-The serverless endpoint can also be type-checked independently:
-
-```bash
-npx tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --lib ES2022,DOM api/extract.ts
+node --check api/extract.js
 ```
 
 ## Current architecture
