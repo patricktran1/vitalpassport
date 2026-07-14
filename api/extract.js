@@ -1,1 +1,447 @@
-const j="https://api.tokenfactory.nebius.com/v1/chat/completions",k="meta-llama/Llama-4-Scout-17B-16E-Instruct",w=new Set(["document","medication","lab","voice","symptom","question","photo"]),I=3e4,R=38e5,T={name:"health_item_extraction",strict:!0,schema:{type:"object",additionalProperties:!1,properties:{document_type:{type:"string",enum:["medication_bottle","lab_report","after_visit_summary","discharge_summary","imaging_report","symptom_note","question","health_photo","other"]},title:{type:"string"},summary:{type:"string"},event_date:{type:"string"},facility:{type:"string"},medications:{type:"array",items:{type:"object",additionalProperties:!1,properties:{name:{type:"string"},strength:{type:"string"},directions:{type:"string"},prescriber:{type:"string"}},required:["name","strength","directions","prescriber"]}},lab_results:{type:"array",items:{type:"object",additionalProperties:!1,properties:{test:{type:"string"},value:{type:"string"},unit:{type:"string"},reference_range:{type:"string"},abnormal_flag:{type:"string"}},required:["test","value","unit","reference_range","abnormal_flag"]}},diagnoses:{type:"array",items:{type:"string"}},instructions:{type:"array",items:{type:"string"}},symptoms:{type:"array",items:{type:"string"}},follow_up:{type:"string"},evidence:{type:"array",items:{type:"object",additionalProperties:!1,properties:{field:{type:"string"},value:{type:"string"},quote:{type:"string"},confidence:{type:"number",minimum:0,maximum:1}},required:["field","value","quote","confidence"]}},warnings:{type:"array",items:{type:"string"}},requires_confirmation:{type:"boolean"},confidence:{type:"number",minimum:0,maximum:1}},required:["document_type","title","summary","event_date","facility","medications","lab_results","diagnoses","instructions","symptoms","follow_up","evidence","warnings","requires_confirmation","confidence"]}};function i(e){return!!e&&typeof e=="object"&&!Array.isArray(e)}function n(e){return typeof e=="string"?e.trim():""}function p(e){return Array.isArray(e)?e.map(n).filter(Boolean).slice(0,30):[]}function v(e){const r=typeof e=="number"?e:Number(e);return Number.isFinite(r)?Math.min(1,Math.max(0,r)):0}function q(e){if(typeof e!="string")throw new Error("The model returned no structured content.");const r=e.replace(/^```(?:json)?\s*/i,"").replace(/\s*```$/,"").trim(),s=JSON.parse(r);if(!i(s))throw new Error("The model output was not a JSON object.");return s}function S(e,r){const s=Array.isArray(e.medications)?e.medications.filter(i).slice(0,20).map(t=>({name:n(t.name),strength:n(t.strength),directions:n(t.directions),prescriber:n(t.prescriber)})).filter(t=>t.name||t.strength||t.directions):[],a=Array.isArray(e.lab_results)?e.lab_results.filter(i).slice(0,40).map(t=>({test:n(t.test),value:n(t.value),unit:n(t.unit),reference_range:n(t.reference_range),abnormal_flag:n(t.abnormal_flag)})).filter(t=>t.test||t.value):[],u=Array.isArray(e.evidence)?e.evidence.filter(i).slice(0,40).map(t=>({field:n(t.field),value:n(t.value),quote:n(t.quote),confidence:v(t.confidence)})).filter(t=>t.field||t.value||t.quote):[];return{document_type:n(e.document_type)||"other",title:n(e.title)||"Health information",summary:n(e.summary)||"Health information extracted for patient review.",event_date:n(e.event_date),facility:n(e.facility),medications:s,lab_results:a,diagnoses:p(e.diagnoses),instructions:p(e.instructions),symptoms:p(e.symptoms),follow_up:n(e.follow_up),evidence:u,warnings:p(e.warnings),requires_confirmation:!!e.requires_confirmation,confidence:v(e.confidence),model:r,mode:"live"}}async function E(e,r){return fetch(j,{method:"POST",headers:{Authorization:`Bearer ${e}`,"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify(r)})}async function L(e,r){if(r.setHeader("Cache-Control","no-store"),e.method!=="POST")return r.status(405).json({error:"Method not allowed.",code:"METHOD_NOT_ALLOWED"});const s=process.env.NEBIUS_API_KEY;if(!s)return r.status(503).json({error:"Live AI extraction is waiting for the Nebius API key in Vercel.",code:"MISSING_API_KEY"});const a=i(e.body)?e.body:{},u=n(a.kind),t=n(a.text).slice(0,I),c=n(a.imageDataUrl),d=n(a.fileName).slice(0,180);if(!w.has(u))return r.status(400).json({error:"Unsupported health item type.",code:"INVALID_KIND"});if(!t&&!c)return r.status(400).json({error:"Add an image or text to analyze.",code:"EMPTY_INPUT"});if(c&&(!/^data:image\/(jpeg|png|webp);base64,/i.test(c)||c.length>R))return r.status(413).json({error:"The image is too large or uses an unsupported format.",code:"INVALID_IMAGE"});const y=process.env.NEBIUS_MODEL||k,g=[{type:"text",text:[`The patient categorized this item as: ${u}.`,d?`Filename: ${d}.`:"",t?`Patient-provided text:\n${t}`:"","Extract only facts that are explicitly visible or stated in the supplied source.","Do not diagnose, infer causation, recommend treatment, or fill missing facts from medical knowledge.","Use empty strings or empty arrays when information is absent.","Evidence quotes must be short exact snippets from the source. Mark uncertain, conflicting, or incomplete details as requiring patient confirmation.","Return the complete JSON structure requested by the schema."].filter(Boolean).join("\n\n")}];c&&g.push({type:"image_url",image_url:{url:c}});const f={model:y,temperature:.1,max_tokens:2400,messages:[{role:"system",content:"You are a conservative medical-record extraction engine. Preserve provenance, uncertainty, and exact source meaning. Never provide medical advice."},{role:"user",content:g}]};try{let o=await E(s,{...f,response_format:{type:"json_schema",json_schema:T}});!o.ok&&[400,422].includes(o.status)&&(o=await E(s,{...f,response_format:{type:"json_object"}}));const l=await o.json().catch(()=>null);if(!o.ok){const A=i(l?.error)?n(l?.error.message):"";return console.error("Nebius extraction error",o.status,A),r.status(o.status>=500?502:400).json({error:A||"Nebius could not analyze this item. Check the configured model and try again.",code:"NEBIUS_REQUEST_FAILED"})}const _=Array.isArray(l?.choices)?l?.choices:[],m=i(_[0])?_[0]:null,h=m&&i(m.message)?m.message:null,b=n(h?.refusal);if(b)return r.status(422).json({error:b,code:"MODEL_REFUSAL"});const x=q(h?.content),N=S(x,y);return r.status(200).json({extraction:N})}catch(o){return console.error("Vital Passport extraction failed",o),r.status(500).json({error:"The extraction service encountered an unexpected error.",code:"EXTRACTION_FAILED"})}}export{L as default};
+const NEBIUS_BASE_URL = 'https://api.tokenfactory.nebius.com/v1'
+const ALLOWED_KINDS = new Set(['document', 'medication', 'lab', 'voice', 'symptom', 'question', 'photo'])
+const MAX_TEXT_LENGTH = 30_000
+const MAX_DATA_URL_LENGTH = 3_800_000
+const MODEL_CACHE_MS = 10 * 60 * 1000
+
+let cachedVisionModel = null
+let cachedVisionModels = []
+let modelCacheTimestamp = 0
+
+const extractionSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    document_type: {
+      type: 'string',
+      enum: [
+        'medication_bottle',
+        'lab_report',
+        'after_visit_summary',
+        'discharge_summary',
+        'imaging_report',
+        'symptom_note',
+        'question',
+        'health_photo',
+        'other',
+      ],
+    },
+    title: { type: 'string' },
+    summary: { type: 'string' },
+    event_date: { type: 'string' },
+    facility: { type: 'string' },
+    medications: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          name: { type: 'string' },
+          strength: { type: 'string' },
+          directions: { type: 'string' },
+          prescriber: { type: 'string' },
+        },
+        required: ['name', 'strength', 'directions', 'prescriber'],
+      },
+    },
+    lab_results: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          test: { type: 'string' },
+          value: { type: 'string' },
+          unit: { type: 'string' },
+          reference_range: { type: 'string' },
+          abnormal_flag: { type: 'string' },
+        },
+        required: ['test', 'value', 'unit', 'reference_range', 'abnormal_flag'],
+      },
+    },
+    diagnoses: { type: 'array', items: { type: 'string' } },
+    instructions: { type: 'array', items: { type: 'string' } },
+    symptoms: { type: 'array', items: { type: 'string' } },
+    follow_up: { type: 'string' },
+    evidence: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          field: { type: 'string' },
+          value: { type: 'string' },
+          quote: { type: 'string' },
+          confidence: { type: 'number', minimum: 0, maximum: 1 },
+        },
+        required: ['field', 'value', 'quote', 'confidence'],
+      },
+    },
+    warnings: { type: 'array', items: { type: 'string' } },
+    requires_confirmation: { type: 'boolean' },
+    confidence: { type: 'number', minimum: 0, maximum: 1 },
+  },
+  required: [
+    'document_type',
+    'title',
+    'summary',
+    'event_date',
+    'facility',
+    'medications',
+    'lab_results',
+    'diagnoses',
+    'instructions',
+    'symptoms',
+    'follow_up',
+    'evidence',
+    'warnings',
+    'requires_confirmation',
+    'confidence',
+  ],
+}
+
+function isObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function cleanString(value) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function cleanStringArray(value) {
+  return Array.isArray(value) ? value.map(cleanString).filter(Boolean).slice(0, 30) : []
+}
+
+function clampConfidence(value) {
+  const number = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(number) ? Math.min(1, Math.max(0, number)) : 0
+}
+
+function parseJsonContent(content) {
+  if (typeof content !== 'string') throw new Error('The model returned no structured content.')
+  const normalized = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+  const parsed = JSON.parse(normalized)
+  if (!isObject(parsed)) throw new Error('The model output was not a JSON object.')
+  return parsed
+}
+
+function normalizeExtraction(raw, model) {
+  const medications = Array.isArray(raw.medications)
+    ? raw.medications
+        .filter(isObject)
+        .slice(0, 20)
+        .map((item) => ({
+          name: cleanString(item.name),
+          strength: cleanString(item.strength),
+          directions: cleanString(item.directions),
+          prescriber: cleanString(item.prescriber),
+        }))
+        .filter((item) => item.name || item.strength || item.directions)
+    : []
+
+  const labResults = Array.isArray(raw.lab_results)
+    ? raw.lab_results
+        .filter(isObject)
+        .slice(0, 40)
+        .map((item) => ({
+          test: cleanString(item.test),
+          value: cleanString(item.value),
+          unit: cleanString(item.unit),
+          reference_range: cleanString(item.reference_range),
+          abnormal_flag: cleanString(item.abnormal_flag),
+        }))
+        .filter((item) => item.test || item.value)
+    : []
+
+  const evidence = Array.isArray(raw.evidence)
+    ? raw.evidence
+        .filter(isObject)
+        .slice(0, 40)
+        .map((item) => ({
+          field: cleanString(item.field),
+          value: cleanString(item.value),
+          quote: cleanString(item.quote),
+          confidence: clampConfidence(item.confidence),
+        }))
+        .filter((item) => item.field || item.value || item.quote)
+    : []
+
+  return {
+    document_type: cleanString(raw.document_type) || 'other',
+    title: cleanString(raw.title) || 'Health information',
+    summary: cleanString(raw.summary) || 'Health information extracted for patient review.',
+    event_date: cleanString(raw.event_date),
+    facility: cleanString(raw.facility),
+    medications,
+    lab_results: labResults,
+    diagnoses: cleanStringArray(raw.diagnoses),
+    instructions: cleanStringArray(raw.instructions),
+    symptoms: cleanStringArray(raw.symptoms),
+    follow_up: cleanString(raw.follow_up),
+    evidence,
+    warnings: cleanStringArray(raw.warnings),
+    requires_confirmation: Boolean(raw.requires_confirmation),
+    confidence: clampConfidence(raw.confidence),
+    model,
+    mode: 'live',
+  }
+}
+
+function providerErrorMessage(payload) {
+  if (!payload) return ''
+  if (typeof payload === 'string') return payload.trim()
+  if (typeof payload.message === 'string') return payload.message.trim()
+  if (typeof payload.detail === 'string') return payload.detail.trim()
+  if (Array.isArray(payload.detail)) {
+    const messages = payload.detail
+      .map((item) => (isObject(item) ? cleanString(item.msg) : cleanString(item)))
+      .filter(Boolean)
+    if (messages.length) return messages.join('; ')
+  }
+  if (typeof payload.error === 'string') return payload.error.trim()
+  if (isObject(payload.error)) {
+    return cleanString(payload.error.message) || cleanString(payload.error.detail) || cleanString(payload.error.code)
+  }
+  return ''
+}
+
+function modelHasVision(model) {
+  const id = cleanString(model?.id)
+  const modality = cleanString(model?.architecture?.modality).toLowerCase()
+  const description = cleanString(model?.description).toLowerCase()
+  const imagePrice = Number(model?.pricing?.image || 0)
+  return (
+    /llama-4|qwen.*(?:vl|vision)|pixtral|llava|vision|(?:^|[-_/])vl(?:[-_/]|$)/i.test(id) ||
+    /vision|image/.test(modality) ||
+    /vision|image/.test(description) ||
+    imagePrice > 0
+  )
+}
+
+function modelScore(model) {
+  const id = cleanString(model?.id).toLowerCase()
+  const modality = cleanString(model?.architecture?.modality).toLowerCase()
+  let score = 0
+  if (/meta-llama/.test(id)) score += 100
+  if (/llama-4/.test(id)) score += 100
+  if (/maverick/.test(id)) score += 30
+  if (/scout/.test(id)) score += 25
+  if (/qwen/.test(id) && /(?:vl|vision)/.test(id)) score += 80
+  if (/pixtral|llava/.test(id)) score += 60
+  if (/vision|image/.test(modality)) score += 30
+  if (/-fast$/.test(id)) score += 5
+  return score
+}
+
+async function listVisionModels(apiKey) {
+  if (cachedVisionModel && Date.now() - modelCacheTimestamp < MODEL_CACHE_MS) {
+    return { selected: cachedVisionModel, available: cachedVisionModels }
+  }
+
+  const response = await fetch(`${NEBIUS_BASE_URL}/models?verbose=true`, {
+    headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
+  })
+  const payload = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(providerErrorMessage(payload) || `Nebius model discovery failed with status ${response.status}.`)
+  }
+
+  const models = Array.isArray(payload?.data) ? payload.data.filter(isObject) : []
+  const visionModels = models
+    .filter(modelHasVision)
+    .sort((a, b) => modelScore(b) - modelScore(a))
+    .map((model) => cleanString(model.id))
+    .filter(Boolean)
+
+  if (!visionModels.length) {
+    throw new Error('No vision-capable models were found in this Nebius project.')
+  }
+
+  cachedVisionModels = visionModels
+  cachedVisionModel = visionModels[0]
+  modelCacheTimestamp = Date.now()
+  return { selected: cachedVisionModel, available: cachedVisionModels }
+}
+
+async function callNebius(apiKey, model, baseRequest, useJsonMode = true) {
+  const body = {
+    ...baseRequest,
+    model,
+    ...(useJsonMode ? { response_format: { type: 'json_object' } } : {}),
+  }
+  return fetch(`${NEBIUS_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+}
+
+async function runModel(apiKey, model, baseRequest) {
+  let response = await callNebius(apiKey, model, baseRequest, true)
+  let payload = await response.json().catch(() => null)
+
+  if (!response.ok && [400, 422].includes(response.status)) {
+    const message = providerErrorMessage(payload).toLowerCase()
+    if (/response[_ -]?format|json_object|guided|schema/.test(message)) {
+      response = await callNebius(apiKey, model, baseRequest, false)
+      payload = await response.json().catch(() => null)
+    }
+  }
+
+  return { response, payload }
+}
+
+function shouldTryAnotherModel(status, message) {
+  if (![400, 404, 422].includes(status)) return false
+  return /model|vision|image|multimodal|not found|not supported|unknown/.test(message.toLowerCase())
+}
+
+function friendlyProviderError(status, message, model) {
+  if (status === 401 || status === 403) {
+    return 'Nebius rejected the API key. Check NEBIUS_API_KEY in Vercel and redeploy.'
+  }
+  if (status === 402) return 'Nebius billing or account credits need attention before extraction can run.'
+  if (status === 429) return 'Nebius is rate-limiting requests. Wait briefly and try again.'
+  if (status >= 500) return 'Nebius is temporarily unavailable. Try again in a moment.'
+  return message ? `Nebius rejected model ${model}: ${message}` : `Nebius could not analyze this item with model ${model}.`
+}
+
+export default async function handler(request, response) {
+  response.setHeader('Cache-Control', 'no-store')
+
+  const apiKey = process.env.NEBIUS_API_KEY
+  if (!apiKey) {
+    return response.status(503).json({
+      error: 'Live AI extraction is waiting for the Nebius API key in Vercel.',
+      code: 'MISSING_API_KEY',
+    })
+  }
+
+  if (request.method === 'GET') {
+    try {
+      const catalog = await listVisionModels(apiKey)
+      return response.status(200).json({
+        ready: true,
+        configured_model: cleanString(process.env.NEBIUS_MODEL) || null,
+        selected_model: cleanString(process.env.NEBIUS_MODEL) || catalog.selected,
+        available_vision_models: catalog.available.slice(0, 10),
+      })
+    } catch (error) {
+      return response.status(502).json({
+        ready: false,
+        error: error instanceof Error ? error.message : 'Nebius model discovery failed.',
+        code: 'MODEL_DISCOVERY_FAILED',
+      })
+    }
+  }
+
+  if (request.method !== 'POST') {
+    return response.status(405).json({ error: 'Method not allowed.', code: 'METHOD_NOT_ALLOWED' })
+  }
+
+  const body = isObject(request.body) ? request.body : {}
+  const kind = cleanString(body.kind)
+  const text = cleanString(body.text).slice(0, MAX_TEXT_LENGTH)
+  const imageDataUrl = cleanString(body.imageDataUrl)
+  const fileName = cleanString(body.fileName).slice(0, 180)
+
+  if (!ALLOWED_KINDS.has(kind)) {
+    return response.status(400).json({ error: 'Unsupported health item type.', code: 'INVALID_KIND' })
+  }
+  if (!text && !imageDataUrl) {
+    return response.status(400).json({ error: 'Add an image or text to analyze.', code: 'EMPTY_INPUT' })
+  }
+  if (
+    imageDataUrl &&
+    (!/^data:image\/(jpeg|png|webp);base64,/i.test(imageDataUrl) || imageDataUrl.length > MAX_DATA_URL_LENGTH)
+  ) {
+    return response.status(413).json({
+      error: 'The image is too large or uses an unsupported format.',
+      code: 'INVALID_IMAGE',
+    })
+  }
+
+  const content = [
+    {
+      type: 'text',
+      text: [
+        `The patient categorized this item as: ${kind}.`,
+        fileName ? `Filename: ${fileName}.` : '',
+        text ? `Patient-provided text:\n${text}` : '',
+        'Extract only facts that are explicitly visible or stated in the supplied source.',
+        'Do not diagnose, infer causation, recommend treatment, or fill missing facts from medical knowledge.',
+        'Use empty strings or empty arrays when information is absent.',
+        'Evidence quotes must be short exact snippets from the source.',
+        'Mark uncertain, conflicting, or incomplete details as requiring patient confirmation.',
+        `Return one JSON object that follows this schema exactly:\n${JSON.stringify(extractionSchema)}`,
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+    },
+  ]
+
+  if (imageDataUrl) content.push({ type: 'image_url', image_url: { url: imageDataUrl } })
+
+  const baseRequest = {
+    temperature: 0.1,
+    max_tokens: 2400,
+    messages: [
+      {
+        role: 'system',
+        content:
+          'You are a conservative medical-record extraction engine. Preserve provenance, uncertainty, and exact source meaning. Never provide medical advice.',
+      },
+      { role: 'user', content },
+    ],
+  }
+
+  try {
+    let discovery = null
+    let selectedModel = cleanString(process.env.NEBIUS_MODEL)
+
+    if (!selectedModel) {
+      discovery = await listVisionModels(apiKey)
+      selectedModel = discovery.selected
+    }
+
+    let result = await runModel(apiKey, selectedModel, baseRequest)
+    let providerMessage = providerErrorMessage(result.payload)
+
+    if (!result.response.ok && shouldTryAnotherModel(result.response.status, providerMessage)) {
+      discovery = discovery || (await listVisionModels(apiKey))
+      const alternate = discovery.available.find((model) => model !== selectedModel)
+      if (alternate) {
+        selectedModel = alternate
+        result = await runModel(apiKey, selectedModel, baseRequest)
+        providerMessage = providerErrorMessage(result.payload)
+      }
+    }
+
+    if (!result.response.ok) {
+      console.error('Nebius extraction error', result.response.status, selectedModel, providerMessage)
+      return response.status(result.response.status >= 500 ? 502 : 400).json({
+        error: friendlyProviderError(result.response.status, providerMessage, selectedModel),
+        code: 'NEBIUS_REQUEST_FAILED',
+        model: selectedModel,
+      })
+    }
+
+    const choices = Array.isArray(result.payload?.choices) ? result.payload.choices : []
+    const firstChoice = isObject(choices[0]) ? choices[0] : null
+    const message = firstChoice && isObject(firstChoice.message) ? firstChoice.message : null
+    const refusal = cleanString(message?.refusal)
+    if (refusal) return response.status(422).json({ error: refusal, code: 'MODEL_REFUSAL', model: selectedModel })
+
+    const parsed = parseJsonContent(message?.content)
+    const extraction = normalizeExtraction(parsed, selectedModel)
+    return response.status(200).json({ extraction })
+  } catch (error) {
+    console.error('Vital Passport extraction failed', error)
+    const message = error instanceof Error ? error.message : 'The extraction service encountered an unexpected error.'
+    return response.status(500).json({ error: message, code: 'EXTRACTION_FAILED' })
+  }
+}
