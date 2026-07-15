@@ -3,7 +3,7 @@ const MAX_QUESTION_LENGTH = 1800
 const MAX_RECORD_LENGTH = 80_000
 const MODEL_CACHE_MS = 10 * 60 * 1000
 
-const ROUTES = new Set(['/add', '/timeline', '/prepare', '/brief', '/transfer', '/copilot'])
+const ROUTES = new Set(['/add', '/timeline', '/prepare', '/brief', '/transfer', '/copilot', '/inbox', '/check-ins', '/memory'])
 const SIGNAL_KINDS = new Set(['change', 'attention', 'gap', 'context'])
 
 let cachedChatModels = []
@@ -207,11 +207,11 @@ export default async function handler(request, response) {
 
   const responseShape = {
     headline: 'Brief title',
-    answer: 'Plain-language answer grounded only in the supplied record.',
+    answer: 'Plain-language answer grounded only in the supplied record and clearly labeled patient-controlled memory.',
     record_status: 'grounded or limited',
     citations: [{ source_id: 'exact source id from record.sources', label: 'source label', quote: 'short supporting excerpt' }],
     signals: [{ kind: 'change | attention | gap | context', title: 'signal title', detail: 'why it matters' }],
-    next_steps: [{ label: 'safe action label', detail: 'what the patient can do', route: '/add | /timeline | /prepare | /brief | /transfer | /copilot' }],
+    next_steps: [{ label: 'safe action label', detail: 'what the patient can do', route: '/add | /timeline | /prepare | /brief | /transfer | /copilot | /inbox | /check-ins | /memory' }],
     follow_up_prompts: ['short grounded follow-up question'],
   }
 
@@ -220,10 +220,14 @@ export default async function handler(request, response) {
     `Patient-controlled longitudinal record:\n${serializedRecord}`,
     `Return exactly one JSON object shaped like:\n${JSON.stringify(responseShape)}`,
     'Use only the supplied record. Do not invent diagnoses, causal relationships, dates, medications, results, or clinician conclusions.',
-    'Every factual claim should be traceable to the record. Cite only exact source IDs found in record.sources.',
-    'Distinguish clearly between what is documented, what changed, what conflicts, and what remains unknown.',
+    'Every medical factual claim should be traceable to the source-backed record. Cite only exact source IDs found in record.sources.',
+    'patient_controlled_memory contains context the patient explicitly chose to remember. Use it for communication preferences, goals, priorities, concerns, and personal context.',
+    'Patient-controlled memory is not clinical evidence. Do not use an unlinked memory item to assert a diagnosis, medication fact, lab result, date, or treatment plan.',
+    'Do not cite memory items as sources. When an answer relies on memory rather than source evidence, label it clearly as remembered patient context.',
+    'When asked what you remember, summarize only patient_controlled_memory and remind the patient that it can be edited or forgotten from Copilot memory.',
+    'Distinguish clearly between what is documented, what the patient asked Copilot to remember, what changed, what conflicts, and what remains unknown.',
     'Never tell the patient to start, stop, skip, or change a medication. Never prescribe treatment or diagnose a condition.',
-    'Safe next steps may include reviewing a source, adding missing history, confirming a discrepancy, preparing questions, sharing a brief, or contacting a clinician.',
+    'Safe next steps may include reviewing a source, managing Copilot memory, adding missing history, confirming a discrepancy, preparing questions, sharing a brief, completing a check-in, or contacting a clinician.',
     'When asked whether one event caused another, say the record may show timing or overlap but cannot establish causation unless a source explicitly states it.',
     'Use warm, plain language. Keep the answer concise enough to scan on a phone.',
   ].join('\n\n')
@@ -234,7 +238,7 @@ export default async function handler(request, response) {
     messages: [
       {
         role: 'system',
-        content: 'You are Vital Passport Health Copilot, a conservative patient-controlled health-history assistant. Preserve provenance and uncertainty. You explain the record and help the patient prepare, but you do not practice medicine.',
+        content: 'You are Vital Passport Health Copilot, a conservative patient-controlled health-history assistant with transparent, user-editable memory. Preserve provenance and uncertainty. You explain the record and help the patient prepare, but you do not practice medicine.',
       },
       { role: 'user', content: prompt },
     ],
