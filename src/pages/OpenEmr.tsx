@@ -23,6 +23,8 @@ import {
   type OpenEmrPatient,
 } from '../lib/openemr'
 
+const RECEIPT_STORAGE_KEY = 'vital-openemr-receipt'
+
 function isoDob(value: string) {
   const parsed = new Date(value)
   return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().slice(0, 10)
@@ -128,13 +130,32 @@ export function OpenEmr() {
     if (!selectedPatient) return
     setLoading('import')
     setError('')
+    setReceipt(null)
+    window.localStorage.removeItem(RECEIPT_STORAGE_KEY)
     try {
       const nextReceipt = demoMode
         ? createDemoOpenEmrReceipt(selectedPatient.id, packet, options)
         : await importOpenEmrPacket(selectedPatient.id, packet, options)
       setReceipt(nextReceipt)
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'OpenEMR import failed.')
+      const message = caught instanceof Error ? caught.message : 'OpenEMR import failed.'
+      const failedReceipt: OpenEmrImportReceipt = {
+        status: 'failed',
+        importedAt: new Date().toISOString(),
+        patientId: selectedPatient.id,
+        openEmr: {
+          baseUrl: config?.displayBaseUrl || 'OpenEMR',
+          site: config?.site || 'default',
+          software: 'OpenEMR',
+          version: '',
+        },
+        resources: [],
+        failures: [{ resourceType: 'PatientDocument', error: message }],
+        warnings: [],
+      }
+      setError(message)
+      setReceipt(failedReceipt)
+      window.localStorage.setItem(RECEIPT_STORAGE_KEY, JSON.stringify(failedReceipt))
     } finally {
       setLoading('')
     }
@@ -152,7 +173,7 @@ export function OpenEmr() {
       <div className="openemr-step"><span>1</span><div><strong>Inspect server</strong><small>Read the capability statement and SMART configuration.</small></div></div>
       <div className="openemr-step"><span>2</span><div><strong>Authorize</strong><small>Use OAuth 2.0 Authorization Code with PKCE.</small></div></div>
       <div className="openemr-step"><span>3</span><div><strong>Match patient</strong><small>Select the chart. Vital Passport never guesses.</small></div></div>
-      <div className="openemr-step"><span>4</span><div><strong>Preview and send</strong><small>DocumentReference first, discrete data only by choice.</small></div></div>
+      <div className="openemr-step"><span>4</span><div><strong>Preview and send</strong><small>Upload one reviewed patient document through OpenEMR's native API.</small></div></div>
     </section>
 
     {error && <div className="openemr-error"><TriangleAlert size={18}/><span>{error}</span></div>}
@@ -178,13 +199,13 @@ export function OpenEmr() {
 
     <section className={`card openemr-preview ${!selectedPatient ? 'disabled-card' : ''}`}>
       <div className="card-heading"><div><div className="eyebrow">Import preview</div><h2>{selectedPatient ? `Proposed handoff to ${selectedPatient.name}` : 'Select a patient to preview the write'}</h2></div><span className="soft-icon"><FileText size={20}/></span></div>
-      <div className="openemr-safety-note"><ShieldCheck size={18}/><div><strong>DocumentReference is always first</strong><span>The clinician packet includes medications and visible discrepancies as narrative. Vital Passport never creates MedicationRequest resources or medication orders.</span></div></div>
+      <div className="openemr-safety-note"><ShieldCheck size={18}/><div><strong>One reviewed patient document</strong><span>The full packet is uploaded through OpenEMR's native patient-document API. Vital Passport never creates medication orders.</span></div></div>
       <div className="openemr-write-grid">
-        <label className="locked"><input type="checkbox" checked readOnly/><span><strong>Patient intake document</strong><small>One source-linked DocumentReference with the full handoff.</small></span></label>
-        <label><input type="checkbox" checked={options.includeLabs} onChange={(event)=>setOptions((current)=>({...current,includeLabs:event.target.checked}))}/><span><strong>{packet.labs.length} lab observations</strong><small>Patient-provided, source-labeled, and marked for verification.</small></span></label>
-        <label><input type="checkbox" checked={options.includeConditions} onChange={(event)=>setOptions((current)=>({...current,includeConditions:event.target.checked}))}/><span><strong>{packet.patient.conditions.length} conditions</strong><small>Created as unconfirmed problem-list candidates.</small></span></label>
-        <label><input type="checkbox" checked={options.includeAllergies} onChange={(event)=>setOptions((current)=>({...current,includeAllergies:event.target.checked}))}/><span><strong>Allergy statements</strong><small>“No known allergies” stays narrative and is not converted into an allergy.</small></span></label>
-        <label><input type="checkbox" checked={options.includeProvenance} onChange={(event)=>setOptions((current)=>({...current,includeProvenance:event.target.checked}))}/><span><strong>FHIR Provenance receipt</strong><small>Links the created resources to the patient-controlled handoff.</small></span></label>
+        <label className="locked"><input type="checkbox" checked readOnly/><span><strong>Patient intake document</strong><small>One source-linked document containing the complete reviewed handoff.</small></span></label>
+        <label><input type="checkbox" checked={options.includeLabs} onChange={(event)=>setOptions((current)=>({...current,includeLabs:event.target.checked}))}/><span><strong>{packet.labs.length} lab results in document</strong><small>Patient-provided, source-labeled, and marked for verification.</small></span></label>
+        <label><input type="checkbox" checked={options.includeConditions} onChange={(event)=>setOptions((current)=>({...current,includeConditions:event.target.checked}))}/><span><strong>{packet.patient.conditions.length} conditions in document</strong><small>Kept as narrative to avoid duplicate problem-list entries.</small></span></label>
+        <label><input type="checkbox" checked={options.includeAllergies} onChange={(event)=>setOptions((current)=>({...current,includeAllergies:event.target.checked}))}/><span><strong>Allergy statements in document</strong><small>“No known allergies” remains narrative and is not converted into an allergy.</small></span></label>
+        <label><input type="checkbox" checked={options.includeProvenance} onChange={(event)=>setOptions((current)=>({...current,includeProvenance:event.target.checked}))}/><span><strong>Embedded source provenance</strong><small>Source links and excerpts travel inside the patient-controlled handoff and receipt.</small></span></label>
       </div>
       <button className="button primary openemr-import-button" onClick={importPacket} disabled={!selectedPatient || Boolean(loading)}>{loading === 'import' ? <><LoaderCircle className="spin" size={17}/> Sending to OpenEMR</> : <>Send reviewed intake <ArrowRight size={17}/></>}</button>
     </section>
