@@ -55,7 +55,12 @@ function packetText(packet) {
 }
 
 function tokenScopes(value) {
-  return new Set(String(value || '').split(/\s+/).filter(Boolean))
+  return new Set(
+    String(value || '')
+      .split(/[\s,]+/)
+      .map((scope) => scope.trim())
+      .filter(Boolean),
+  )
 }
 
 function hasDocumentScope(scopes) {
@@ -162,14 +167,11 @@ export default async function handler(req, res) {
     }
 
     const granted = tokenScopes(body.grantedScope)
-    if (!hasDocumentScope(granted)) {
-      return sendJson(res, 403, {
-        error: 'Reconnect OpenEMR with Standard API patient and document scopes before sending the intake.',
-        code: 'OPENEMR_DOCUMENT_SCOPE_REQUIRED',
-        requiredScopes: REQUIRED_STANDARD_SCOPES,
-      })
-    }
+    const scopeClaimMismatch = granted.size > 0 && !hasDocumentScope(granted)
 
+    // OpenEMR may omit scopes or serialize them in a non-standard format in the token response.
+    // Do not reject a valid token based only on that advisory claim. The native API remains the
+    // authorization authority and will return 401/403 if the actual grant is insufficient.
     const pid = await resolveNumericPid(config, accessToken, patientId)
     const content = packetText(packet)
     const date = new Date().toISOString().slice(0, 10)
@@ -177,6 +179,7 @@ export default async function handler(req, res) {
     const uploaded = await uploadPatientDocument(config, accessToken, pid, filename, content)
 
     const warnings = []
+    if (scopeClaimMismatch) warnings.push(`OpenEMR's token response did not list all expected Standard API scopes (${REQUIRED_STANDARD_SCOPES.join(', ')}), but the native patient-document API authorized the upload.`)
     if (options.includeLabs && (packet.labs || []).length) warnings.push(`${packet.labs.length} laboratory result${packet.labs.length === 1 ? '' : 's'} were included in the intake document because this OpenEMR capability statement does not advertise Observation creation.`)
     if (options.includeConditions && (packet.patient.conditions || []).length) warnings.push('Conditions remained in the reviewed intake document; no duplicate problem-list entries were created.')
     if (options.includeAllergies && (packet.patient.allergies || []).length) warnings.push('Allergy statements remained in the reviewed intake document; no duplicate allergy entries were created.')
@@ -201,7 +204,7 @@ export default async function handler(req, res) {
   } catch (error) {
     const status = Number(error?.status) || 500
     const scopeHint = status === 401 || status === 403
-      ? ' The OpenEMR authorization may be missing api:oemr, user/patient.crus, or user/document.crs.'
+      ? ' OpenEMR rejected the native API request. Confirm the client grant includes api:oemr, user/patient.crus, and user/document.crs.'
       : ''
     return sendJson(res, status >= 400 && status < 600 ? status : 500, {
       error: `${error instanceof Error ? error.message : 'OpenEMR document upload failed.'}${scopeHint}`,
