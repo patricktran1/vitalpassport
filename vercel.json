@@ -6,6 +6,9 @@
   "functions": {
     "api/extract.js": {
       "maxDuration": 60
+    },
+    "api/openemr.js": {
+      "maxDuration": 60
     }
   },
   "rewrites": [
