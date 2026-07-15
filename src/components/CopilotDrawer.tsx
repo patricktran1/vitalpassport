@@ -3,6 +3,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useVital } from '../context/VitalContext'
 import { askHealthCopilot, buildHealthRecordSnapshot, type CopilotResult, type CopilotSignalKind } from '../lib/copilot'
+import { VoiceInputButton } from './VoiceInputButton'
 
 type ChatMessage = {
   id: string
@@ -129,6 +130,11 @@ export function CopilotDrawer({ open, promptRequest, onClose }: CopilotDrawerPro
     void ask(question)
   }
 
+  const appendTranscript = (transcript: string) => {
+    setQuestion((current) => [current.trim(), transcript].filter(Boolean).join(' '))
+    window.setTimeout(() => textareaRef.current?.focus(), 40)
+  }
+
   const goTo = (route: string) => {
     onClose()
     navigate(route)
@@ -206,7 +212,8 @@ export function CopilotDrawer({ open, promptRequest, onClose }: CopilotDrawerPro
 
           <form className="copilot-composer copilot-drawer-composer" onSubmit={submit}>
             <MessageCircleMore size={19}/>
-            <textarea ref={textareaRef} value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Ask what changed, what conflicts, or what to prepare for…" rows={2} maxLength={1800}/>
+            <textarea ref={textareaRef} value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Ask by typing or speaking…" rows={2} maxLength={1800}/>
+            <VoiceInputButton onTranscript={appendTranscript} disabled={loading} />
             <button type="submit" disabled={!question.trim() || loading} aria-label="Ask Health Copilot"><Send size={18}/></button>
           </form>
           <p className="copilot-boundary">Explains your record and preserves uncertainty. It does not diagnose or change treatment.</p>

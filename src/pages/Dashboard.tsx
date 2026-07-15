@@ -1,12 +1,19 @@
-import { AlertCircle, ArrowRight, Bot, CalendarClock, CheckCircle2, ChevronRight, CircleCheck, CircleDashed, FileText, GitCompareArrows, HeartPulse, Inbox as InboxIcon, ListChecks, Pill, ScanSearch, Sparkles, TestTube2 } from 'lucide-react'
+import { AlertCircle, ArrowRight, BellRing, Bot, CalendarClock, CheckCircle2, ChevronRight, CircleCheck, CircleDashed, FileText, GitCompareArrows, HeartPulse, Inbox as InboxIcon, ListChecks, Pill, ScanSearch, Sparkles, TestTube2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { ProgressRing } from '../components/ProgressRing'
+import { useCheckIns } from '../context/CheckInContext'
 import { useHealthInbox } from '../context/HealthInboxContext'
 import { useVital } from '../context/VitalContext'
 import { patient } from '../data/demo'
 import { openCopilotDrawer } from '../lib/copilot-drawer'
 
 const uploadIcons = { medication: Pill, document: FileText, lab: TestTube2, voice: FileText, symptom: HeartPulse, question: FileText, photo: FileText }
+
+function formatCheckInDue(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Schedule pending'
+  return new Intl.DateTimeFormat('en-US', { weekday:'short', hour:'numeric', minute:'2-digit' }).format(date)
+}
 
 export function Dashboard() {
   const {
@@ -25,6 +32,7 @@ export function Dashboard() {
     sources,
   } = useVital()
   const { pendingFindings, pendingCount } = useHealthInbox()
+  const { nextSchedule, dueCount, startCheckIn } = useCheckIns()
   const openTasks=careTasks.filter((task)=>task.status==='open')
   const metoprololIssue=reconciliationIssues.find((issue)=>issue.id==='issue-metoprolol')
   const displayedIssues=[...reconciliationIssues].sort((a,b)=>a.status===b.status?b.createdAt.localeCompare(a.createdAt):a.status==='open'?-1:1).slice(0,3)
@@ -61,6 +69,12 @@ export function Dashboard() {
           {pendingFindings.slice(0,3).map((finding) => <div className="dashboard-inbox-item" key={finding.id}><AlertCircle size={16}/><div><strong>{finding.title}</strong><small>{finding.kind.replace('_',' ')}</small></div></div>)}
         </div> : <div className="dashboard-inbox-clear"><CircleCheck size={18}/><span>Your latest health information has been reviewed.</span></div>}
       </section>
+
+      {nextSchedule && <section className="dashboard-checkin-preview">
+        <span><BellRing size={20}/></span>
+        <div><div className="eyebrow">Proactive check-in</div><h2>{dueCount ? 'Vital Passport is checking in with you' : nextSchedule.title}</h2><p>{dueCount ? nextSchedule.prompt : `${nextSchedule.prompt} · ${formatCheckInDue(nextSchedule.nextDueAt)}`}</p></div>
+        <button className={`button ${dueCount ? 'primary' : 'light'}`} onClick={() => startCheckIn(nextSchedule.id)}>{dueCount ? 'Answer now' : 'Check in early'}</button>
+      </section>}
 
       <section className="hero-card">
         <div className="hero-copy">

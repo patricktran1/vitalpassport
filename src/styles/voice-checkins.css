@@ -1,0 +1,94 @@
+.copilot-composer { grid-template-columns:auto 1fr auto auto; }
+.voice-input-wrap { position:relative; display:inline-grid; place-items:center; }
+.voice-input-button { width:40px; height:40px; border:0; border-radius:12px; display:grid; place-items:center; color:#315b57; background:#edf3ef; cursor:pointer; transition:transform .16s ease, background .16s ease; }
+.voice-input-button:hover { transform:translateY(-1px); background:#e1ebe5; }
+.voice-input-button.listening { color:white; background:#a45e61; animation:voice-pulse 1.35s ease-in-out infinite; }
+.voice-input-button:disabled { opacity:.4; cursor:not-allowed; }
+.voice-input-live,.voice-input-error { position:absolute; right:0; bottom:48px; z-index:5; width:max-content; max-width:240px; padding:7px 9px; border:1px solid #d8e2dd; border-radius:9px; background:#fffefa; box-shadow:0 10px 24px rgba(30,55,51,.12); color:#506762; font-size:9px; line-height:1.35; }
+.voice-input-error { color:#8b544f; border-color:#eccdc5; }
+@keyframes voice-pulse { 50% { box-shadow:0 0 0 7px rgba(164,94,97,.13); } }
+
+.checkins-page { max-width:1320px; }
+.checkin-status-hero { margin-bottom:20px; padding:22px 24px; display:grid; grid-template-columns:auto 1fr auto; gap:16px; align-items:center; border:1px solid #d7e2dc; border-radius:22px; background:linear-gradient(135deg,#edf4ef,#f3eef7); box-shadow:var(--shadow); }
+.checkin-status-hero.due { border-color:#e7c9b6; background:linear-gradient(135deg,#fff4e8,#f4edf8); }
+.checkin-status-hero>span { width:50px; height:50px; display:grid; place-items:center; border-radius:16px; background:var(--ink); color:white; }
+.checkin-status-hero h2 { margin:0 0 4px; font-size:20px; }
+.checkin-status-hero p { margin:0; color:var(--muted); font-size:11px; line-height:1.5; }
+.checkin-page-grid { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(300px,.72fr); gap:20px; align-items:start; }
+.checkin-schedule-stack { display:grid; gap:12px; }
+.checkin-schedule-card { padding:20px; border:1px solid #dce5e0; border-radius:19px; background:#fffefa; box-shadow:0 12px 34px rgba(35,58,53,.05); }
+.checkin-schedule-card.disabled { opacity:.68; }
+.checkin-card-top,.checkin-card-actions,.checkin-delivery-row { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.checkin-enabled-toggle { display:flex; align-items:center; gap:7px; color:#4c6a62; font-size:10px; font-weight:800; }
+.checkin-enabled-toggle input { accent-color:#315b57; }
+.checkin-title-input,.checkin-prompt-input { width:100%; border:0; outline:0; background:transparent; color:var(--ink); }
+.checkin-title-input { margin:13px 0 6px; font-size:17px; font-weight:800; letter-spacing:-.02em; }
+.checkin-prompt-input { resize:vertical; color:#556a66; font-size:11.5px; line-height:1.5; }
+.checkin-fields { display:grid; grid-template-columns:1.2fr 1fr 1fr 1fr; gap:9px; margin:15px 0; }
+.checkin-fields label>span { display:block; margin-bottom:5px; color:#75827f; font-size:8.5px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
+.checkin-fields select,.checkin-fields input { width:100%; min-height:40px; padding:8px 10px; border:1px solid #dce4e0; border-radius:10px; background:#f9fbf9; color:#365852; font-size:10.5px; }
+.checkin-delivery-row { justify-content:flex-start; flex-wrap:wrap; padding-top:13px; border-top:1px solid #e8edea; }
+.delivery-chip { min-height:32px; display:inline-flex; align-items:center; gap:6px; padding:6px 9px; border:1px solid #dce5e0; border-radius:999px; background:white; color:#6c7b78; font-size:9.5px; font-weight:800; }
+button.delivery-chip { cursor:pointer; }
+.delivery-chip.active { color:#3f665b; border-color:#bed2c7; background:#edf5f0; }
+.checkin-next-due { margin-left:auto; display:flex; align-items:center; gap:5px; color:#7b8885; font-size:9.5px; }
+.checkin-card-actions { margin-top:14px; }
+.checkin-card-actions small { color:#899491; font-size:9px; }
+.checkin-delivery-panel { position:sticky; top:24px; padding:20px; border:1px solid #dce5e0; border-radius:20px; background:#fffefa; box-shadow:0 12px 34px rgba(35,58,53,.05); }
+.delivery-option { display:grid; grid-template-columns:24px 1fr auto; gap:10px; align-items:start; padding:13px 0; border-bottom:1px solid #e7ece9; color:#657470; }
+.delivery-option.ready { color:#3e685d; }
+.delivery-option.locked { color:#8a817d; }
+.delivery-option strong,.delivery-option span { display:block; }
+.delivery-option strong { font-size:10.5px; }
+.delivery-option span { margin-top:3px; color:var(--muted); font-size:9px; line-height:1.45; }
+.delivery-option em { padding:4px 7px; border-radius:999px; background:#f0f3f1; font-size:8px; font-style:normal; font-weight:800; white-space:nowrap; }
+.checkin-cloud-note { display:flex; gap:8px; align-items:flex-start; margin-top:14px; padding:11px; border-radius:12px; background:#f4f1f7; color:#665d70; font-size:9.5px; line-height:1.5; }
+.checkin-history-card { margin-top:20px; }
+.checkin-history-list { display:grid; gap:0; }
+.checkin-history-list>div { padding:13px 0; border-top:1px solid #e8edea; }
+.checkin-history-list span,.checkin-history-list strong,.checkin-history-list small { display:block; }
+.checkin-history-list span { color:#6d7d79; font-size:8.5px; text-transform:uppercase; letter-spacing:.08em; font-weight:800; }
+.checkin-history-list strong { margin-top:4px; font-size:11.5px; line-height:1.45; }
+.checkin-history-list small { margin-top:4px; color:#899491; font-size:9px; }
+.checkin-history-empty { display:flex; gap:8px; align-items:center; color:var(--muted); font-size:10.5px; }
+
+.checkin-prompt-backdrop { position:fixed; inset:0; z-index:120; display:grid; place-items:center; padding:20px; background:rgba(18,39,38,.36); backdrop-filter:blur(4px); }
+.checkin-prompt { width:min(620px,100%); overflow:hidden; border:1px solid rgba(255,255,255,.8); border-radius:24px; background:#fffefa; box-shadow:0 30px 100px rgba(18,43,41,.28); }
+.checkin-prompt>header { min-height:70px; display:grid; grid-template-columns:auto 1fr auto; gap:11px; align-items:center; padding:13px 16px; border-bottom:1px solid #e2e9e5; background:linear-gradient(135deg,#e8f0ea,#eee8f4); }
+.checkin-prompt-icon { width:40px; height:40px; display:grid; place-items:center; border-radius:13px; background:var(--ink); color:white; }
+.checkin-prompt header small,.checkin-prompt header strong { display:block; }
+.checkin-prompt header small { color:#6f807c; font-size:8.5px; text-transform:uppercase; letter-spacing:.08em; font-weight:800; }
+.checkin-prompt header strong { margin-top:2px; font-size:13px; }
+.checkin-prompt-body { padding:24px; }
+.checkin-focus-pill { width:max-content; display:flex; align-items:center; gap:6px; padding:6px 9px; border-radius:999px; background:#edf4ef; color:#47685f; font-size:9px; font-weight:800; }
+.checkin-prompt h2 { margin:14px 0 7px; font-size:23px; letter-spacing:-.035em; }
+.checkin-prompt p { margin:0 0 16px; color:var(--muted); font-size:11px; line-height:1.55; }
+.checkin-response-box { position:relative; border:1px solid #cfddd5; border-radius:16px; background:white; box-shadow:0 8px 22px rgba(30,55,51,.06); }
+.checkin-response-box textarea { width:100%; resize:vertical; border:0; outline:0; padding:14px 60px 14px 14px; border-radius:16px; background:transparent; color:var(--ink); font-size:12.5px; line-height:1.55; }
+.checkin-response-box .voice-input-wrap { position:absolute; right:9px; bottom:9px; }
+.checkin-prompt-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; margin-top:13px; }
+.checkin-safety-note { display:flex; gap:7px; align-items:flex-start; margin-top:16px; padding-top:13px; border-top:1px solid #e8edea; color:#7e8986; font-size:9px; line-height:1.45; }
+.dashboard-checkin-preview { margin-bottom:20px; padding:18px 20px; display:grid; grid-template-columns:auto 1fr auto; gap:13px; align-items:center; border:1px solid #dce5e0; border-radius:18px; background:#fffefa; }
+.dashboard-checkin-preview>span { width:42px; height:42px; display:grid; place-items:center; border-radius:13px; background:#edf3ef; color:#41665c; }
+.dashboard-checkin-preview h2 { margin:0 0 3px; font-size:16px; }
+.dashboard-checkin-preview p { margin:0; color:var(--muted); font-size:10px; }
+.nav-checkin-badge { margin-left:auto; min-width:20px; height:20px; display:grid; place-items:center; border-radius:999px; background:#a45e61; color:white; font-size:8.5px; font-weight:800; }
+
+@media (max-width:1050px) {
+  .checkin-page-grid { grid-template-columns:1fr; }
+  .checkin-delivery-panel { position:static; }
+}
+@media (max-width:720px) {
+  .copilot-composer { grid-template-columns:auto 1fr auto auto; gap:6px; padding-left:10px; }
+  .voice-input-live,.voice-input-error { right:-46px; }
+  .checkin-status-hero,.dashboard-checkin-preview { grid-template-columns:auto 1fr; }
+  .checkin-status-hero>.button,.dashboard-checkin-preview>.button { grid-column:1 / -1; width:100%; }
+  .checkin-fields { grid-template-columns:1fr 1fr; }
+  .checkin-prompt-body { padding:20px; }
+  .checkin-prompt-actions { display:grid; grid-template-columns:1fr; }
+  .checkin-prompt-actions .button { width:100%; }
+  .checkin-next-due { width:100%; margin-left:0; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .voice-input-button.listening { animation:none; }
+}
