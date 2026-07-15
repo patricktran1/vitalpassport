@@ -13,10 +13,11 @@ Vital Passport is a patient-controlled health intelligence product that turns sc
 - Care tasks, timeline events, and clinician brief generated from the structured record
 - Local-first persistence that survives browser restarts
 - Optional Supabase magic-link accounts and cross-device cloud synchronization
-- Row-level database policies that restrict each record to its authenticated owner
+- Expiring, revocable, view-only clinic links with QR access and access counts
+- Frozen clinician packets that cannot open or modify the patient account
+- Row-level database policies that restrict each record and share record to its authenticated owner
 - Adaptive pre-visit interview and source-linked clinician brief
-- Download, print, QR-code, and sharing demonstrations
-- Responsive desktop and mobile interface
+- Download, print, and responsive desktop/mobile interfaces
 
 The included demo patient and records are entirely synthetic. Do not use identifiable patient information until privacy, security, retention, regulatory, and clinical-safety requirements have been reviewed and implemented.
 
@@ -36,15 +37,15 @@ NEBIUS_MODEL=the_exact_model_identifier
 
 Redeploy after changing server environment variables. The key is read only by the Vercel function in `api/extract.js` and is never exposed to the browser.
 
-## Supabase account persistence
+## Supabase account persistence and sharing
 
-Vital Passport works without Supabase. In local mode, the complete structured patient record is retained in browser storage. Supabase adds passwordless email sign-in and cross-device persistence.
+Vital Passport works without Supabase. In local mode, the complete structured patient record is retained in browser storage and the synthetic Maria sharing route remains available. Supabase adds passwordless email sign-in, cross-device persistence, and real revocable clinic links.
 
 ### 1. Create a Supabase project
 
 Create a project and open its SQL Editor.
 
-### 2. Create the protected patient-record table
+### 2. Create the protected record and sharing tables
 
 Run the contents of:
 
@@ -52,7 +53,14 @@ Run the contents of:
 supabase/schema.sql
 ```
 
-The table uses Row Level Security. Authenticated users can select, insert, and update only the row whose `user_id` matches their Supabase identity.
+This creates:
+
+- `public.patient_records`, containing one versioned record per authenticated user
+- `public.shared_briefs`, containing frozen clinician packets and only a SHA-256 hash of each share secret
+- Row Level Security policies that let authenticated users manage only their own rows
+- `get_shared_brief(text)`, a narrowly scoped public function that returns a packet only when the supplied secret is valid, unexpired, and not revoked
+
+The public resolver increments the packet access count and updates its last-accessed time. It does not return the owner ID, account record, email address, or any other account data.
 
 ### 3. Configure authentication URLs
 
@@ -74,7 +82,7 @@ VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=your_publishable_key
 ```
 
-These values are intentionally browser-visible. Access control is enforced by authenticated JWTs and the database RLS policies. Never place a Supabase service-role key in a `VITE_` variable.
+These values are intentionally browser-visible. Access control is enforced by authenticated JWTs, Row Level Security, and the share-token resolver. Never place a Supabase service-role key in a `VITE_` variable.
 
 Redeploy after adding the variables.
 
@@ -86,6 +94,22 @@ Open the cloud-status control in the sidebar, enter an email address, and use th
 - An existing cloud record is restored when one is present.
 - Future changes are saved automatically after a short debounce.
 - The account panel provides manual save and cloud-reload controls.
+
+### 6. Create a clinic link
+
+Open the clinician brief and choose **Share clinic link** or **Visit QR code**.
+
+A real share link:
+
+- Uses a cryptographically random 256-bit secret
+- Stores only the SHA-256 hash of that secret in Supabase
+- Freezes the current clinician packet at creation time
+- Expires after 24 hours, 72 hours, or seven days
+- Can be revoked immediately by the patient
+- Tracks access count and last-opened time
+- Exposes only the frozen packet, never the patient account
+
+The raw link secret is kept only on the browser that created it. Other signed-in devices can see and revoke the share record, but cannot reconstruct the original URL. They can create a replacement link when needed.
 
 ## Record architecture
 
@@ -101,6 +125,8 @@ A single versioned patient snapshot contains:
 - Care and follow-up tasks
 
 The browser maintains an offline local copy. Signed-in users additionally store the snapshot in `public.patient_records`, scoped to their authenticated user ID.
+
+A shared clinician packet is separate from that live record. It includes only the selected patient demographics, visit reason, priorities, medications, labs, reconciliation status, timeline, tasks, and source summaries needed for the handoff.
 
 ## Extraction flow
 
@@ -134,9 +160,9 @@ GitHub Actions runs the TypeScript and production builds for every feature branc
 ## Next technical milestones
 
 1. Multi-page PDF ingestion and document splitting
-2. Real expiring clinic-sharing records with access logs
-3. FHIR-compatible patient-summary export
-4. Caregiver and dependent profiles
+2. FHIR-compatible patient-summary export
+3. Caregiver and dependent profiles
+4. Source-file object storage with signed URLs
 5. Security, privacy, regulatory, and clinical-safety hardening
 
 ## Safety

@@ -4,11 +4,13 @@ import { AddHealth } from './pages/AddHealth'
 import { Brief } from './pages/Brief'
 import { Dashboard } from './pages/Dashboard'
 import { Prepare } from './pages/Prepare'
+import { SharedBrief } from './pages/SharedBrief'
 import { Timeline } from './pages/Timeline'
 
 export default function App() {
   return (
     <Routes>
+      <Route path="s/:token" element={<SharedBrief />} />
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
         <Route path="add" element={<AddHealth />} />

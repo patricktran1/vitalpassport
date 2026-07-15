@@ -187,3 +187,74 @@ export interface PatientRecordSnapshot {
   reconciliationIssues: ReconciliationIssue[]
   careTasks: CareTask[]
 }
+
+export interface SharedBriefPacket {
+  schemaVersion: 1
+  preparedAt: string
+  patient: {
+    name: string
+    age: number
+    dob: string
+    pronouns: string
+    conditions: string[]
+    allergies: string[]
+  }
+  visit: {
+    label: string
+    reason: string
+  }
+  readiness: {
+    percent: number
+    interviewConfirmed: number
+    interviewTotal: number
+    openInterviewGaps: number
+    openReconciliationCount: number
+  }
+  priorities: string[]
+  medications: Array<{
+    name: string
+    strength: string
+    directions: string
+    status: MedicationSummary['status']
+    sourceCount: number
+  }>
+  labs: Array<{
+    test: string
+    value: string
+    unit: string
+    abnormalFlag: string
+    eventDate: string
+    trend?: string
+    sourceId: string
+  }>
+  reconciliation: Array<{
+    title: string
+    status: ReconciliationIssue['status']
+    detail: string
+    resolution?: string
+    sources: Array<{ label: string; value: string; sourceId: string }>
+  }>
+  timeline: TimelineEvent[]
+  openTasks: Array<Pick<CareTask, 'title' | 'detail' | 'dueLabel'>>
+  sources: SourceRecord[]
+  disclaimer: string
+}
+
+export interface SharedBriefEnvelope {
+  packet: SharedBriefPacket
+  createdAt: string
+  expiresAt: string
+  accessCount: number
+}
+
+export interface ShareLinkRecord {
+  id: string
+  label: string
+  createdAt: string
+  expiresAt: string
+  revokedAt: string | null
+  lastAccessedAt: string | null
+  accessCount: number
+  token?: string
+  url?: string
+}
