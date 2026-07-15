@@ -1,11 +1,11 @@
-import { Check, ChevronRight, Download, ExternalLink, FileText, Link2, ListChecks, PencilLine, Printer, QrCode, Share2, ShieldCheck, TriangleAlert } from 'lucide-react'
+import { Check, ChevronRight, Download, ExternalLink, FileText, ListChecks, PencilLine, Printer, QrCode, Share2, ShieldCheck, TriangleAlert } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { QRCodeSVG } from 'qrcode.react'
-import { Modal } from '../components/Modal'
+import { ShareBriefModal } from '../components/ShareBriefModal'
 import { StatusBadge } from '../components/StatusBadge'
 import { useVital } from '../context/VitalContext'
 import { patient } from '../data/demo'
+import { buildSharedBriefPacket } from '../lib/briefPacket'
 
 export function Brief() {
   const {
@@ -14,7 +14,6 @@ export function Brief() {
     readiness,
     openGapCount,
     resolvedCount,
-    reviewGaps,
     medicationSummaries,
     labResults,
     reconciliationIssues,
@@ -24,9 +23,7 @@ export function Brief() {
     timelineEvents,
   } = useVital()
   const [shareOpen,setShareOpen]=useState(false)
-  const [qrOpen,setQrOpen]=useState(false)
-  const [copied,setCopied]=useState(false)
-  const shareUrl='https://vitalpassport.com/s/demo-maria-72h'
+  const [shareMode,setShareMode]=useState<'link'|'qr'>('link')
   const priorities=(answers.priorities || 'Could my medication be contributing to the dizziness? Do I need additional testing? What symptoms should make me seek urgent care?').split(/\n|\?\s+/).filter(Boolean).map((p)=>p.trim()+(p.trim().endsWith('?')?'':'?')).slice(0,3)
   const timingContext=answers.timing ? ` Patient reports the dizziness began ${answers.timing.toLowerCase()}.` : ''
   const positionalContext=answers.positional ? ` Standing trigger: ${answers.positional.toLowerCase()}.` : ''
@@ -46,6 +43,20 @@ export function Brief() {
     }).slice(0,4)
   },[labResults])
 
+  const sharePacket=useMemo(()=>buildSharedBriefPacket({
+    answers,
+    readiness,
+    openGapCount,
+    resolvedCount,
+    openReconciliationCount,
+    medicationSummaries,
+    labResults,
+    reconciliationIssues,
+    careTasks,
+    sources,
+    timelineEvents,
+  }),[answers,readiness,openGapCount,resolvedCount,openReconciliationCount,medicationSummaries,labResults,reconciliationIssues,careTasks,sources,timelineEvents])
+
   const downloadBrief=()=>{
     const medicationText=medicationSummaries.map((medication)=>`- ${medication.name}: ${medication.strength}${medication.directions?` · ${medication.directions}`:''} [${medication.status}]`).join('\n')
     const labText=latestLabs.map((lab)=>`- ${lab.test}: ${lab.value} ${lab.unit} ${lab.abnormalFlag}${lab.trend?` (${lab.trend})`:''}`).join('\n')
@@ -54,14 +65,15 @@ export function Brief() {
     const text=`VITAL PASSPORT CLINICIAN BRIEF\n\nPatient: ${patient.name}, age ${patient.age}\nReason for visit: Dizziness and fatigue beginning around June 20, 2026.${timingContext}${positionalContext}\n\nPATIENT PRIORITIES\n${priorities.map((p,i)=>`${i+1}. ${p}`).join('\n')}\n\nCURRENT MEDICATIONS\n${medicationText}\n\nRECONCILIATION\n${issueText}\n\nRELEVANT RESULTS\n${labText}\n\nOPEN NEXT ACTIONS\n${taskText}\n\nThis patient-controlled summary organizes source-linked information. Verify against original records before clinical use.`
     const blob=new Blob([text],{type:'text/plain'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='Maria-Santos-Vital-Passport-Brief.txt'; a.click(); URL.revokeObjectURL(url)
   }
-  const copyLink=async()=>{await navigator.clipboard.writeText(shareUrl);setCopied(true);setTimeout(()=>setCopied(false),1800)}
+
+  const openSharing=(mode:'link'|'qr')=>{setShareMode(mode);setShareOpen(true)}
 
   return <div className="page brief-page">
     <section className="page-heading split-heading"><div><div className="eyebrow">Clinician-ready handoff</div><h1>Visit brief</h1><p>A concise, source-linked summary generated from the reconciled patient record.</p></div><div className={`readiness-chip ${readyToShare?'complete':''}`}><ShieldCheck size={18}/><span><strong>{readyToShare?'Ready to share':`${readiness}% ready`}</strong> · Patient controlled</span></div></section>
 
     <div className="brief-toolbar no-print">
-      <button className="button ghost" onClick={()=>setShareOpen(true)}><Share2 size={16}/> Share secure link</button>
-      <button className="button ghost" onClick={()=>setQrOpen(true)}><QrCode size={16}/> Visit QR code</button>
+      <button className="button ghost" onClick={()=>openSharing('link')}><Share2 size={16}/> Share clinic link</button>
+      <button className="button ghost" onClick={()=>openSharing('qr')}><QrCode size={16}/> Visit QR code</button>
       <button className="button ghost" onClick={downloadBrief}><Download size={16}/> Download</button>
       <button className="button ghost" onClick={()=>window.print()}><Printer size={16}/> Print</button>
     </div>
@@ -103,8 +115,6 @@ export function Brief() {
     </article>
 
     <Link to="/" className="floating-edit no-print"><PencilLine size={16}/> Edit reconciled record</Link>
-
-    {shareOpen&&<Modal title="Share clinician brief" onClose={()=>setShareOpen(false)}><p className="modal-copy">Create a temporary, view-only link for the clinic. This demo link expires after 72 hours.</p><div className="share-link-box"><Link2 size={18}/><span>{shareUrl}</span><button onClick={copyLink}>{copied?'Copied':'Copy'}</button></div><div className="share-settings"><div><strong>Expires</strong><span>72 hours after first access</span></div><div><strong>Access</strong><span>View-only clinician brief and sources</span></div></div><button className="button primary full" onClick={copyLink}>{copied?<><Check size={17}/> Link copied</>:<>Create secure link</>}</button></Modal>}
-    {qrOpen&&<Modal title="Visit QR code" onClose={()=>setQrOpen(false)}><div className="qr-panel"><QRCodeSVG value={shareUrl} size={210} bgColor="#ffffff" fgColor="#173a3a" level="M"/><h3>Scan at check-in</h3><p>Opens a temporary, read-only version of Maria’s reconciled clinician brief.</p></div></Modal>}
+    {shareOpen&&<ShareBriefModal packet={sharePacket} initialMode={shareMode} onClose={()=>setShareOpen(false)}/>} 
   </div>
 }
