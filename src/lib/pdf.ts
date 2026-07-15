@@ -60,7 +60,8 @@ async function renderPageToJpeg(
 
 export async function renderPdfThumbnails(file: File): Promise<PdfPreview> {
   const document = await loadPdf(file)
-  const visiblePageCount = Math.min(document.numPages, MAX_PDF_PAGES_VISIBLE)
+  const pageCount = document.numPages
+  const visiblePageCount = Math.min(pageCount, MAX_PDF_PAGES_VISIBLE)
   const pages: PdfPageThumbnail[] = []
 
   try {
@@ -70,13 +71,13 @@ export async function renderPdfThumbnails(file: File): Promise<PdfPreview> {
       page.cleanup()
     }
   } finally {
-    await document.destroy()
+    await document.cleanup()
   }
 
   return {
-    pageCount: document.numPages,
+    pageCount,
     visiblePageCount,
-    truncated: document.numPages > visiblePageCount,
+    truncated: pageCount > visiblePageCount,
     pages,
   }
 }
@@ -105,7 +106,7 @@ export async function renderPdfPagesForAnalysis(
       onProgress?.(index + 1, selected.length)
     }
   } finally {
-    await document.destroy()
+    await document.cleanup()
   }
 
   return rendered
