@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto'
+import { buildClinicalBriefHtml, clinicalBriefFilename } from './lib/clinical-brief.js'
 
 const DEFAULT_SITE = 'default'
 const DEFAULT_DOCUMENT_PATH = '/Medical_Record'
+const DOCUMENT_MIME = 'text/html; charset=utf-8'
 const REQUIRED_STANDARD_SCOPES = ['api:oemr', 'user/patient.crus', 'user/document.crs']
 
 function sendJson(res, status, body) {
@@ -44,33 +46,6 @@ async function readBody(req) {
   } catch {
     throw new Error('Request body must be valid JSON.')
   }
-}
-
-function safeText(value, max = 5000) {
-  return String(value ?? '').replace(/\u0000/g, '').slice(0, max)
-}
-
-function slug(value) {
-  return safeText(value, 100)
-    .normalize('NFKD')
-    .replace(/[^a-zA-Z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .toLowerCase() || 'patient'
-}
-
-function packetText(packet) {
-  const medications = (packet.medications || [])
-    .map((item) => `- ${safeText(item.name, 200)}: ${[item.strength, item.directions].filter(Boolean).map((part) => safeText(part, 300)).join(' · ')} [${safeText(item.status, 60)}]`)
-    .join('\n') || '- None listed'
-  const labs = (packet.labs || [])
-    .map((item) => `- ${safeText(item.eventDate, 40)} · ${safeText(item.test, 200)}: ${[item.value, item.unit, item.abnormalFlag].filter(Boolean).map((part) => safeText(part, 200)).join(' · ')}`)
-    .join('\n') || '- None listed'
-  const priorities = (packet.priorities || []).map((item, index) => `${index + 1}. ${safeText(item, 1000)}`).join('\n') || '1. No priorities entered'
-  const issues = (packet.reconciliation || []).map((item) => `- ${safeText(item.title, 300)}: ${item.status === 'resolved' ? safeText(item.resolution || 'Resolved', 1000) : safeText(item.detail, 1000)}`).join('\n') || '- No reconciliation issues'
-  const tasks = (packet.openTasks || []).map((item) => `- ${safeText(item.title, 300)}: ${safeText(item.detail, 1000)}`).join('\n') || '- No open tasks'
-  const sources = (packet.sources || []).map((item, index) => `${index + 1}. ${safeText(item.title, 300)} · ${safeText(item.subtitle, 300)}\n   ${safeText(item.excerpt, 2000)}`).join('\n') || 'No sources included'
-
-  return `VITAL PASSPORT PATIENT-CONTROLLED PRE-VISIT INTAKE\n\nPatient: ${safeText(packet.patient?.name, 300)}\nDOB: ${safeText(packet.patient?.dob, 40)}\nPrepared: ${safeText(packet.preparedAt, 80)}\nVisit: ${safeText(packet.visit?.label, 300)}\n\nREASON FOR VISIT\n${safeText(packet.visit?.reason, 3000)}\n\nPATIENT PRIORITIES\n${priorities}\n\nCONDITIONS\n${(packet.patient?.conditions || []).map((item) => safeText(item, 300)).join(', ') || 'None listed'}\n\nALLERGIES\n${(packet.patient?.allergies || []).map((item) => safeText(item, 300)).join(', ') || 'None listed'}\n\nMEDICATIONS\n${medications}\n\nRECONCILIATION\n${issues}\n\nRELEVANT LABS\n${labs}\n\nOPEN NEXT ACTIONS\n${tasks}\n\nSOURCE INDEX\n${sources}\n\n${safeText(packet.disclaimer, 3000)}`
 }
 
 function tokenScopes(value) {
@@ -176,7 +151,7 @@ async function verifyThroughFhir(config, accessToken, patientUuid, filename) {
         return {
           id: String(match.id || ''),
           filename,
-          mimetype: String(attachment?.contentType || 'text/plain'),
+          mimetype: String(attachment?.contentType || 'text/html'),
           docdate: String(match.date || match.meta?.lastUpdated || ''),
           binaryUrl: String(attachment?.url || ''),
           categories: categoryLabels(match),
@@ -193,15 +168,12 @@ async function verifyThroughFhir(config, accessToken, patientUuid, filename) {
 
   if (lastError && Number(lastError?.status) !== 404) throw lastError
   const names = observedTitles.slice(0, 8)
-  throw new Error(`OpenEMR accepted the upload to ${displayDocumentPath(config.documentPath)}, but FHIR did not expose the categorized file afterward. Visible titles: ${names.length ? names.join(', ') : 'none'}.`)
+  throw new Error(`OpenEMR accepted the clinical brief in ${displayDocumentPath(config.documentPath)}, but FHIR did not expose it afterward. Visible titles: ${names.length ? names.join(', ') : 'none'}.`)
 }
 
 async function uploadPatientDocument(config, accessToken, pid, patientUuid, filename, content) {
-  // This OpenEMR 8.1.1 instance has a database-confirmed /Medical_Record
-  // category, but its native document-list GET endpoint returns 404. Posting
-  // only to the known category prevents the earlier uncategorized uploads.
   const form = new FormData()
-  form.append('document', new Blob([content], { type: 'text/plain; charset=utf-8' }), filename)
+  form.append('document', new Blob([content], { type: DOCUMENT_MIME }), filename)
 
   const { response, body } = await fetchOpenEmr(documentUrl(config, pid, config.documentPath), {
     method: 'POST',
@@ -217,7 +189,7 @@ async function uploadPatientDocument(config, accessToken, pid, patientUuid, file
     return {
       id: responseId,
       filename,
-      mimetype: 'text/plain',
+      mimetype: 'text/html',
       docdate: new Date().toISOString(),
       binaryUrl: '',
       categories: [displayDocumentPath(config.documentPath)],
@@ -227,11 +199,6 @@ async function uploadPatientDocument(config, accessToken, pid, patientUuid, file
   }
 
   return verifyThroughFhir(config, accessToken, patientUuid, filename)
-}
-
-function uniqueDocumentFilename(patientName) {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '-').replace('Z', 'Z')
-  return `Vital-Passport-${slug(patientName)}-${timestamp}.txt`
 }
 
 export default async function handler(req, res) {
@@ -256,18 +223,19 @@ export default async function handler(req, res) {
     const granted = tokenScopes(body.grantedScope)
     const scopeClaimMismatch = granted.size > 0 && !hasDocumentScope(granted)
     const pid = await resolveNumericPid(config, accessToken, patientId)
-    const content = packetText(packet)
-    const filename = uniqueDocumentFilename(packet.patient.name)
+    const content = buildClinicalBriefHtml(packet)
+    const filename = clinicalBriefFilename(packet.patient.name)
     const expectedHash = createHash('sha3-512').update(content, 'utf8').digest('hex')
     const uploaded = await uploadPatientDocument(config, accessToken, pid, patientId, filename, content)
 
     const warnings = []
     if (scopeClaimMismatch) warnings.push(`OpenEMR's token response did not list all expected Standard API scopes (${REQUIRED_STANDARD_SCOPES.join(', ')}), but the upload and verification succeeded.`)
-    if (options.includeLabs && (packet.labs || []).length) warnings.push(`${packet.labs.length} laboratory result${packet.labs.length === 1 ? '' : 's'} were included in the intake document because this OpenEMR capability statement does not advertise Observation creation.`)
-    if (options.includeConditions && (packet.patient.conditions || []).length) warnings.push('Conditions remained in the reviewed intake document; no duplicate problem-list entries were created.')
-    if (options.includeAllergies && (packet.patient.allergies || []).length) warnings.push('Allergy statements remained in the reviewed intake document; no duplicate allergy entries were created.')
-    if (options.includeProvenance) warnings.push('Source provenance is embedded in the intake document and receipt; no separate FHIR Provenance resource was created for the native OpenEMR document upload.')
-    if ((packet.medications || []).some((item) => item.status !== 'confirmed')) warnings.push('Medication discrepancies were included in the intake document only. No medication orders were created.')
+    warnings.push('A print-ready HTML clinical brief was stored in Medical Record with patient-entered facts, discrepancies, and source provenance.')
+    if (options.includeLabs && (packet.labs || []).length) warnings.push(`${packet.labs.length} laboratory result${packet.labs.length === 1 ? '' : 's'} were included in the clinical brief because this OpenEMR capability statement does not advertise Observation creation.`)
+    if (options.includeConditions && (packet.patient.conditions || []).length) warnings.push('Conditions remained in the reviewed brief; no duplicate problem-list entries were created.')
+    if (options.includeAllergies && (packet.patient.allergies || []).length) warnings.push('Allergy statements remained in the reviewed brief; no duplicate allergy entries were created.')
+    if (options.includeProvenance) warnings.push('Source provenance is embedded in the clinical brief and receipt; no separate FHIR Provenance resource was created for the native OpenEMR document upload.')
+    if ((packet.medications || []).some((item) => item.status !== 'confirmed')) warnings.push('Medication discrepancies were highlighted in the clinical brief only. No medication orders were created.')
 
     const resourceType = uploaded.verificationMethod === 'FHIR DocumentReference search' ? 'DocumentReference' : 'PatientDocument'
     const location = resourceType === 'DocumentReference'
@@ -288,6 +256,7 @@ export default async function handler(req, res) {
         categories: uploaded.categories?.length ? uploaded.categories : [displayDocumentPath(config.documentPath)],
         pid,
         mimetype: uploaded.mimetype,
+        format: 'html-clinical-brief',
         docdate: uploaded.docdate,
         binaryUrl: uploaded.binaryUrl,
         hash: expectedHash,
@@ -301,7 +270,7 @@ export default async function handler(req, res) {
       ? ` OpenEMR rejected an authorization check. Confirm the grant includes ${REQUIRED_STANDARD_SCOPES.join(', ')} and user/DocumentReference.rs.`
       : ''
     return sendJson(res, status >= 400 && status < 600 ? status : 500, {
-      error: `${error instanceof Error ? error.message : 'OpenEMR document upload failed.'}${scopeHint}`,
+      error: `${error instanceof Error ? error.message : 'OpenEMR clinical brief upload failed.'}${scopeHint}`,
       code: status === 401 || status === 403 ? 'OPENEMR_DOCUMENT_SCOPE_REQUIRED' : 'OPENEMR_DOCUMENT_UPLOAD_NOT_VERIFIED',
     })
   }
