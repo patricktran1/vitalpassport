@@ -1,4 +1,4 @@
-import { Check, ChevronRight, Download, ExternalLink, FileText, ListChecks, PencilLine, Printer, QrCode, Share2, ShieldCheck, TriangleAlert } from 'lucide-react'
+import { ArrowUpFromLine, Check, ChevronRight, Download, ExternalLink, FileText, ListChecks, PencilLine, Printer, QrCode, Share2, ShieldCheck, TriangleAlert } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ShareBriefModal } from '../components/ShareBriefModal'
@@ -74,7 +74,8 @@ export function Brief() {
     <div className="brief-toolbar no-print">
       <button className="button ghost" onClick={()=>openSharing('link')}><Share2 size={16}/> Share clinic link</button>
       <button className="button ghost" onClick={()=>openSharing('qr')}><QrCode size={16}/> Visit QR code</button>
-      <button className="button ghost" onClick={downloadBrief}><Download size={16}/> Download</button>
+      <Link className="button ghost transfer-link" to="/transfer"><ArrowUpFromLine size={16}/> Export packet</Link>
+      <button className="button ghost" onClick={downloadBrief}><Download size={16}/> Quick text</button>
       <button className="button ghost" onClick={()=>window.print()}><Printer size={16}/> Print</button>
     </div>
 
