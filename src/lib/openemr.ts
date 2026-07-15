@@ -57,6 +57,7 @@ const HANDOFF_SCOPES = [
   'offline_access',
   'api:fhir',
   'user/Patient.rs',
+  'user/DocumentReference.rs',
   'api:oemr',
   'user/patient.crus',
   'user/document.crs',
