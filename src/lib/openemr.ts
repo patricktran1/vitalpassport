@@ -52,7 +52,15 @@ export interface OpenEmrImportReceipt {
 const TOKEN_KEY = 'vital-openemr-token'
 const PKCE_KEY = 'vital-openemr-pkce'
 const RECEIPT_KEY = 'vital-openemr-receipt'
-const STANDARD_DOCUMENT_SCOPES = ['api:oemr', 'user/patient.crus', 'user/document.crs']
+const HANDOFF_SCOPES = [
+  'openid',
+  'offline_access',
+  'api:fhir',
+  'user/Patient.rs',
+  'api:oemr',
+  'user/patient.crus',
+  'user/document.crs',
+]
 
 async function api<T>(op: string, body?: unknown): Promise<T> {
   const response = await fetch(`/api/openemr?op=${encodeURIComponent(op)}`, {
@@ -113,14 +121,9 @@ async function challengeFor(verifier: string) {
   return base64Url(new Uint8Array(digest))
 }
 
-function withRequiredDocumentScopes(config: OpenEmrConfig): OpenEmrConfig {
-  const scopes = new Set(config.scopes.split(/\s+/).filter(Boolean))
-  STANDARD_DOCUMENT_SCOPES.forEach((scope) => scopes.add(scope))
-  return { ...config, scopes: [...scopes].join(' ') }
-}
-
 export async function getOpenEmrConfig() {
-  return withRequiredDocumentScopes(await api<OpenEmrConfig>('config'))
+  const config = await api<OpenEmrConfig>('config')
+  return { ...config, scopes: HANDOFF_SCOPES.join(' ') }
 }
 
 export function discoverOpenEmr() {
