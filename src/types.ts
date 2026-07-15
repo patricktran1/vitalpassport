@@ -1,6 +1,7 @@
 export type SourceType = 'documented' | 'patient' | 'ai' | 'conflict'
 export type HealthItemType = 'document' | 'medication' | 'lab' | 'voice' | 'symptom' | 'question' | 'photo'
 export type VerificationStatus = 'documented' | 'patient_confirmed' | 'needs_review' | 'superseded'
+export type CloudSyncStatus = 'local' | 'loading' | 'saving' | 'synced' | 'error'
 
 export interface SourceRecord {
   id: string
@@ -172,4 +173,17 @@ export interface InterviewAnswers {
   positional: string
   dose: string
   priorities: string
+}
+
+export interface PatientRecordSnapshot {
+  schemaVersion: 1
+  updatedAt: string
+  answers: InterviewAnswers
+  uploads: UploadItem[]
+  sources: SourceRecord[]
+  timelineEvents: TimelineEvent[]
+  clinicalMedications: ClinicalMedication[]
+  labResults: ClinicalLabResult[]
+  reconciliationIssues: ReconciliationIssue[]
+  careTasks: CareTask[]
 }
