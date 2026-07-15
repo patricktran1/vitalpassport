@@ -1,6 +1,7 @@
 import { AlertTriangle, ArrowRight, BookOpenCheck, Bot, CalendarClock, CheckCircle2, ChevronRight, CircleHelp, FileSearch, History, LoaderCircle, MessageCircleMore, Send, Sparkles } from 'lucide-react'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { VoiceInputButton } from '../components/VoiceInputButton'
 import { useVital } from '../context/VitalContext'
 import { patient } from '../data/demo'
 import { askHealthCopilot, buildHealthRecordSnapshot, type CopilotResult, type CopilotSignalKind } from '../lib/copilot'
@@ -40,6 +41,7 @@ export function Copilot() {
   const [searchParams] = useSearchParams()
   const requestedPrompt = searchParams.get('prompt')?.trim() || ''
   const autoAsked = useRef(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const {
     sources,
     timelineEvents,
@@ -109,6 +111,11 @@ export function Copilot() {
     void ask(question)
   }
 
+  const appendTranscript = (transcript: string) => {
+    setQuestion((current) => [current.trim(), transcript].filter(Boolean).join(' '))
+    window.setTimeout(() => textareaRef.current?.focus(), 40)
+  }
+
   const openCitation = (sourceId: string) => {
     const source = sources.find((item) => item.id === sourceId)
     if (source) openSource(source)
@@ -122,7 +129,7 @@ export function Copilot() {
           <h1>Ask your health history.</h1>
           <p>Vital Passport explains what your records say, shows its sources, and helps you decide what to clarify next.</p>
         </div>
-        <div className="copilot-grounded-badge"><CheckCircle2 size={17}/><span>Answers cite your record</span></div>
+        <div className="copilot-grounded-badge"><CheckCircle2 size={17}/><span>Type or speak · answers cite your record</span></div>
       </section>
 
       <div className="copilot-layout">
@@ -140,7 +147,7 @@ export function Copilot() {
             <div className="copilot-starter">
               <div className="copilot-starter-copy">
                 <Sparkles size={19}/>
-                <div><strong>Start with a useful question</strong><span>I will answer from {sources.length} source records and show exactly where each fact came from.</span></div>
+                <div><strong>Start with a useful question</strong><span>Type it or tap the microphone. I will answer from {sources.length} source records and show exactly where each fact came from.</span></div>
               </div>
               <div className="copilot-suggestion-grid">
                 {suggestions.map((suggestion) => <button key={suggestion} onClick={() => void ask(suggestion)}>{suggestion}<ChevronRight size={16}/></button>)}
@@ -183,7 +190,8 @@ export function Copilot() {
 
           <form className="copilot-composer" onSubmit={submit}>
             <MessageCircleMore size={20}/>
-            <textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Ask what changed, what conflicts, or what to prepare for…" rows={2} maxLength={1800}/>
+            <textarea ref={textareaRef} value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Ask by typing or speaking…" rows={2} maxLength={1800}/>
+            <VoiceInputButton onTranscript={appendTranscript} disabled={loading} />
             <button type="submit" disabled={!question.trim() || loading} aria-label="Ask Health Copilot"><Send size={19}/></button>
           </form>
           <p className="copilot-boundary">Vital Passport explains your records and helps you prepare. It does not diagnose conditions or tell you to change treatment.</p>
