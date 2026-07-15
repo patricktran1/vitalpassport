@@ -64,6 +64,17 @@ async function api<T>(op: string, body?: unknown): Promise<T> {
   return payload as T
 }
 
+async function confidentialTokenApi<T>(body: unknown): Promise<T> {
+  const response = await fetch('/api/openemr-token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(payload.error || `OpenEMR token exchange failed (${response.status}).`)
+  return payload as T
+}
+
 function base64Url(bytes: Uint8Array) {
   let binary = ''
   bytes.forEach((byte) => { binary += String.fromCharCode(byte) })
@@ -110,7 +121,7 @@ export async function completeOpenEmrAuthorization(code: string, state: string) 
   const parsed = JSON.parse(stored) as { state: string; codeVerifier: string; createdAt: number }
   if (parsed.state !== state) throw new Error('OpenEMR returned an invalid authorization state.')
   if (Date.now() - parsed.createdAt > 10 * 60 * 1000) throw new Error('The OpenEMR authorization attempt expired.')
-  const token = await api<{ access_token: string; refresh_token?: string; expires_in?: number; scope?: string }>('token', { code, codeVerifier: parsed.codeVerifier })
+  const token = await confidentialTokenApi<{ access_token: string; refresh_token?: string; expires_in?: number; scope?: string }>({ code, codeVerifier: parsed.codeVerifier })
   const storedToken = {
     accessToken: token.access_token,
     refreshToken: token.refresh_token || '',
