@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { AddHealth } from './pages/AddHealth'
 import { Brief } from './pages/Brief'
+import { CheckIns } from './pages/CheckIns'
 import { Copilot } from './pages/Copilot'
 import { Dashboard } from './pages/Dashboard'
 import { HealthInbox } from './pages/HealthInbox'
@@ -21,6 +22,7 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="copilot" element={<Copilot />} />
         <Route path="inbox" element={<HealthInbox />} />
+        <Route path="check-ins" element={<CheckIns />} />
         <Route path="add" element={<AddHealth />} />
         <Route path="timeline" element={<Timeline />} />
         <Route path="prepare" element={<Prepare />} />
