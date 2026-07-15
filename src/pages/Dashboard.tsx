@@ -1,6 +1,7 @@
-import { ArrowRight, Bot, CalendarClock, CheckCircle2, ChevronRight, CircleCheck, CircleDashed, FileText, GitCompareArrows, HeartPulse, ListChecks, Pill, ScanSearch, Sparkles, TestTube2 } from 'lucide-react'
+import { AlertCircle, ArrowRight, Bot, CalendarClock, CheckCircle2, ChevronRight, CircleCheck, CircleDashed, FileText, GitCompareArrows, HeartPulse, Inbox as InboxIcon, ListChecks, Pill, ScanSearch, Sparkles, TestTube2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { ProgressRing } from '../components/ProgressRing'
+import { useHealthInbox } from '../context/HealthInboxContext'
 import { useVital } from '../context/VitalContext'
 import { patient } from '../data/demo'
 import { openCopilotDrawer } from '../lib/copilot-drawer'
@@ -23,6 +24,7 @@ export function Dashboard() {
     timelineEvents,
     sources,
   } = useVital()
+  const { pendingFindings, pendingCount } = useHealthInbox()
   const openTasks=careTasks.filter((task)=>task.status==='open')
   const metoprololIssue=reconciliationIssues.find((issue)=>issue.id==='issue-metoprolol')
   const displayedIssues=[...reconciliationIssues].sort((a,b)=>a.status===b.status?b.createdAt.localeCompare(a.createdAt):a.status==='open'?-1:1).slice(0,3)
@@ -47,6 +49,17 @@ export function Dashboard() {
           </div>
         </div>
         <button onClick={() => openCopilotDrawer()} className="button primary copilot-launch-button">Open Health Copilot <ArrowRight size={17}/></button>
+      </section>
+
+      <section className="dashboard-inbox-preview">
+        <div className="dashboard-inbox-header">
+          <span><InboxIcon size={21}/></span>
+          <div><div className="eyebrow">Health Inbox</div><h2>{pendingCount ? `${pendingCount} ${pendingCount === 1 ? 'finding needs' : 'findings need'} your review` : 'No findings are waiting'}</h2></div>
+          <Link to="/inbox" className="text-link">Open inbox <ChevronRight size={16}/></Link>
+        </div>
+        {pendingCount ? <div className="dashboard-inbox-list">
+          {pendingFindings.slice(0,3).map((finding) => <div className="dashboard-inbox-item" key={finding.id}><AlertCircle size={16}/><div><strong>{finding.title}</strong><small>{finding.kind.replace('_',' ')}</small></div></div>)}
+        </div> : <div className="dashboard-inbox-clear"><CircleCheck size={18}/><span>Your latest health information has been reviewed.</span></div>}
       </section>
 
       <section className="hero-card">

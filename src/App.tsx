@@ -4,6 +4,7 @@ import { AddHealth } from './pages/AddHealth'
 import { Brief } from './pages/Brief'
 import { Copilot } from './pages/Copilot'
 import { Dashboard } from './pages/Dashboard'
+import { HealthInbox } from './pages/HealthInbox'
 import { OpenEmr } from './pages/OpenEmr'
 import { OpenEmrCallback } from './pages/OpenEmrCallback'
 import { Prepare } from './pages/Prepare'
@@ -19,6 +20,7 @@ export default function App() {
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
         <Route path="copilot" element={<Copilot />} />
+        <Route path="inbox" element={<HealthInbox />} />
         <Route path="add" element={<AddHealth />} />
         <Route path="timeline" element={<Timeline />} />
         <Route path="prepare" element={<Prepare />} />

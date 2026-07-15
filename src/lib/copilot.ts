@@ -42,7 +42,39 @@ export interface HealthRecordSnapshotInput {
   reviewGaps: Array<{ label: string; detail: string; source: string; resolved: boolean }>
 }
 
+type InboxSnapshotFinding = {
+  id: string
+  kind: string
+  title: string
+  detail: string
+  proposedValue: string
+  finalValue?: string
+  sourceId: string
+  sourceLabel: string
+  sourceQuote: string
+  status: string
+  reviewedAt?: string
+  receipt?: { summary: string; changes: string[] }
+}
+
+function readHealthInbox() {
+  if (typeof window === 'undefined') return { pending: [] as InboxSnapshotFinding[], recentlyReviewed: [] as InboxSnapshotFinding[] }
+  try {
+    const parsed = JSON.parse(window.sessionStorage.getItem('vital-health-inbox-v1') || '[]') as InboxSnapshotFinding[]
+    if (!Array.isArray(parsed)) return { pending: [], recentlyReviewed: [] }
+    const pending = parsed.filter((finding) => finding.status === 'pending').slice(0, 30)
+    const recentlyReviewed = parsed
+      .filter((finding) => finding.status !== 'pending')
+      .sort((a, b) => (b.reviewedAt || '').localeCompare(a.reviewedAt || ''))
+      .slice(0, 20)
+    return { pending, recentlyReviewed }
+  } catch {
+    return { pending: [], recentlyReviewed: [] }
+  }
+}
+
 export function buildHealthRecordSnapshot(input: HealthRecordSnapshotInput) {
+  const inbox = readHealthInbox()
   return {
     patient: {
       name: patient.name,
@@ -56,6 +88,32 @@ export function buildHealthRecordSnapshot(input: HealthRecordSnapshotInput) {
       open_conflict_count: input.reconciliationIssues.filter((issue) => issue.status === 'open').length,
       open_task_count: input.careTasks.filter((task) => task.status === 'open').length,
       unresolved_history_gap_count: input.reviewGaps.filter((gap) => !gap.resolved).length,
+      pending_health_inbox_count: inbox.pending.length,
+      recently_reviewed_health_inbox_count: inbox.recentlyReviewed.length,
+    },
+    health_inbox: {
+      pending: inbox.pending.map((finding) => ({
+        id: finding.id,
+        classification: finding.kind,
+        title: finding.title,
+        detail: finding.detail,
+        proposed_value: finding.proposedValue,
+        source_id: finding.sourceId,
+        source_label: finding.sourceLabel,
+        source_quote: finding.sourceQuote,
+      })),
+      recently_reviewed: inbox.recentlyReviewed.map((finding) => ({
+        id: finding.id,
+        classification: finding.kind,
+        title: finding.title,
+        decision: finding.status,
+        final_value: finding.finalValue || finding.proposedValue,
+        receipt: finding.receipt,
+        source_id: finding.sourceId,
+        source_label: finding.sourceLabel,
+        source_quote: finding.sourceQuote,
+        reviewed_at: finding.reviewedAt,
+      })),
     },
     medications: input.medicationSummaries.slice(0, 30),
     laboratory_results: input.labResults.slice(0, 40),

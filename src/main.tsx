@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import { AuthProvider } from './context/AuthContext'
 import { CloudSyncProvider } from './context/CloudSyncContext'
+import { HealthInboxProvider } from './context/HealthInboxContext'
 import { VitalProvider } from './context/VitalContext'
 import { hydrateSessionFromLocalRecord } from './lib/recordStorage'
 import './styles/index.css'
@@ -15,9 +16,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <AuthProvider>
         <VitalProvider>
-          <CloudSyncProvider>
-            <App />
-          </CloudSyncProvider>
+          <HealthInboxProvider>
+            <CloudSyncProvider>
+              <App />
+            </CloudSyncProvider>
+          </HealthInboxProvider>
         </VitalProvider>
       </AuthProvider>
     </BrowserRouter>
