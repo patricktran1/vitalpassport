@@ -1,7 +1,8 @@
-import { ArrowUpFromLine, Bot, CalendarDays, ChevronRight, ClipboardList, FileHeart, Home, Menu, PlusCircle, RotateCcw, ShieldCheck, Sparkles, X } from 'lucide-react'
+import { ArrowUpFromLine, Bot, CalendarDays, ChevronRight, ClipboardList, FileHeart, Home, Inbox as InboxIcon, Menu, PlusCircle, RotateCcw, ShieldCheck, Sparkles, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { patient } from '../data/demo'
+import { useHealthInbox } from '../context/HealthInboxContext'
 import { useVital } from '../context/VitalContext'
 import { COPILOT_DRAWER_EVENT, type CopilotDrawerRequest } from '../lib/copilot-drawer'
 import { AccountPanel } from './AccountPanel'
@@ -25,6 +26,7 @@ export function Layout() {
   const navigate = useNavigate()
   const location = useLocation()
   const { resetDemo } = useVital()
+  const { pendingCount, resetInbox } = useHealthInbox()
 
   const openCopilot = (prompt = '') => {
     setPromptRequest({ id: Date.now(), prompt })
@@ -43,6 +45,7 @@ export function Layout() {
 
   const handleReset = () => {
     resetDemo()
+    resetInbox()
     setMobileOpen(false)
     setCopilotOpen(false)
     navigate('/')
@@ -63,6 +66,9 @@ export function Layout() {
           <button className={`nav-item copilot-nav-trigger ${copilotOpen ? 'active' : ''}`} onClick={() => openCopilot()} aria-expanded={copilotOpen}>
             <Bot size={19}/><span>Health Copilot</span><Sparkles size={14}/>
           </button>
+          <NavLink to="/inbox" onClick={() => setMobileOpen(false)} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <InboxIcon size={19}/><span>Health Inbox</span>{pendingCount > 0 && <small className="nav-inbox-badge">{pendingCount}</small>}
+          </NavLink>
           {navItems.slice(1).map(({ to, label, icon: Icon }) => (
             <NavLink key={to} to={to} onClick={() => setMobileOpen(false)} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
               <Icon size={19} />
