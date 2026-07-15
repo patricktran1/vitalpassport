@@ -10,15 +10,14 @@
     "api/openemr.js": {
       "maxDuration": 60
     },
+    "api/openemr-import.js": {
+      "maxDuration": 60
+    },
     "api/openemr-import-v2.js": {
       "maxDuration": 60
     }
   },
   "rewrites": [
-    {
-      "source": "/api/openemr-import",
-      "destination": "/api/openemr-import-v2"
-    },
     {
       "source": "/(.*)",
       "destination": "/index.html"
