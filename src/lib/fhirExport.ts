@@ -55,7 +55,7 @@ function encodeUtf8(value: string) {
 function addEntry(entries: FhirBundleEntry[], resource: FhirResource) {
   const resourceType = String(resource.resourceType)
   const id = String(resource.id)
-  entries.push({ fullUrl: `urn:uuid:${resourceType.toLowerCase()}-${id}`, resource })
+  entries.push({ fullUrl: `https://vitalpassport.com/fhir/${resourceType}/${id}`, resource })
 }
 
 export function buildFhirR4Bundle(packet: SharedBriefPacket): FhirExportSummary {
