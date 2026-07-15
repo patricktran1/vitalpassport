@@ -5,6 +5,7 @@ import App from './App'
 import { AuthProvider } from './context/AuthContext'
 import { CheckInProvider } from './context/CheckInContext'
 import { CloudSyncProvider } from './context/CloudSyncContext'
+import { CopilotMemoryProvider } from './context/CopilotMemoryContext'
 import { HealthInboxProvider } from './context/HealthInboxContext'
 import { VitalProvider } from './context/VitalContext'
 import { hydrateSessionFromLocalRecord } from './lib/recordStorage'
@@ -18,11 +19,13 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <AuthProvider>
         <VitalProvider>
           <HealthInboxProvider>
-            <CheckInProvider>
-              <CloudSyncProvider>
-                <App />
-              </CloudSyncProvider>
-            </CheckInProvider>
+            <CopilotMemoryProvider>
+              <CheckInProvider>
+                <CloudSyncProvider>
+                  <App />
+                </CloudSyncProvider>
+              </CheckInProvider>
+            </CopilotMemoryProvider>
           </HealthInboxProvider>
         </VitalProvider>
       </AuthProvider>
