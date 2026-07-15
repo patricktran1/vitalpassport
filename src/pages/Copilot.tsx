@@ -1,7 +1,8 @@
-import { AlertTriangle, ArrowRight, BookOpenCheck, Bot, CalendarClock, CheckCircle2, ChevronRight, CircleHelp, FileSearch, History, LoaderCircle, MessageCircleMore, Send, Sparkles } from 'lucide-react'
+import { AlertTriangle, ArrowRight, BookOpenCheck, BookmarkPlus, Bot, Brain, CalendarClock, CheckCircle2, ChevronRight, CircleHelp, FileSearch, History, LoaderCircle, MessageCircleMore, Send, Sparkles } from 'lucide-react'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { VoiceInputButton } from '../components/VoiceInputButton'
+import { useCopilotMemory } from '../context/CopilotMemoryContext'
 import { useVital } from '../context/VitalContext'
 import { patient } from '../data/demo'
 import { askHealthCopilot, buildHealthRecordSnapshot, type CopilotResult, type CopilotSignalKind } from '../lib/copilot'
@@ -11,13 +12,14 @@ type ChatMessage = {
   role: 'user' | 'assistant'
   text: string
   result?: CopilotResult
+  memorySaved?: boolean
 }
 
 const suggestions = [
   'What changed in my health record recently?',
   'What should I clarify before my next visit?',
   'Summarize my medications and any conflicts.',
-  'What does my record show about the dizziness timeline?',
+  'What do you remember about my goals and preferences?',
 ]
 
 const signalIcons: Record<CopilotSignalKind, typeof History> = {
@@ -52,6 +54,7 @@ export function Copilot() {
     reviewGaps,
     openSource,
   } = useVital()
+  const { activeMemories, remember } = useCopilotMemory()
   const [messages, setMessages] = useState<ChatMessage[]>(readMessages)
   const [question, setQuestion] = useState('')
   const [loading, setLoading] = useState(false)
@@ -65,7 +68,8 @@ export function Copilot() {
     reconciliationIssues,
     careTasks,
     reviewGaps,
-  }), [sources, timelineEvents, medicationSummaries, labResults, reconciliationIssues, careTasks, reviewGaps])
+    memories: activeMemories,
+  }), [sources, timelineEvents, medicationSummaries, labResults, reconciliationIssues, careTasks, reviewGaps, activeMemories])
 
   const openConflicts = reconciliationIssues.filter((issue) => issue.status === 'open')
   const openTasks = careTasks.filter((task) => task.status === 'open')
@@ -116,6 +120,11 @@ export function Copilot() {
     window.setTimeout(() => textareaRef.current?.focus(), 40)
   }
 
+  const rememberMessage = (message: ChatMessage) => {
+    remember({ kind: 'context', title: 'Saved from Health Copilot', value: message.text, origin: 'copilot' })
+    setMessages((current) => current.map((item) => item.id === message.id ? { ...item, memorySaved: true } : item))
+  }
+
   const openCitation = (sourceId: string) => {
     const source = sources.find((item) => item.id === sourceId)
     if (source) openSource(source)
@@ -127,7 +136,7 @@ export function Copilot() {
         <div>
           <div className="eyebrow">Patient-controlled health memory</div>
           <h1>Ask your health history.</h1>
-          <p>Vital Passport explains what your records say, shows its sources, and helps you decide what to clarify next.</p>
+          <p>Vital Passport explains what your records say, shows its sources, and carries forward only the context you explicitly choose to remember.</p>
         </div>
         <div className="copilot-grounded-badge"><CheckCircle2 size={17}/><span>Type or speak · answers cite your record</span></div>
       </section>
@@ -138,8 +147,8 @@ export function Copilot() {
             <span className="copilot-orb"><Bot size={28}/></span>
             <div>
               <div className="eyebrow">Vital Health Copilot</div>
-              <h2>I remember the story across every upload.</h2>
-              <p>I can connect the timeline, medications, labs, symptoms, and open questions without replacing your doctor or inventing facts.</p>
+              <h2>I remember what you choose, not everything you say.</h2>
+              <p>I connect the timeline, medications, labs, symptoms, open questions, and patient-controlled memory without replacing your doctor or inventing facts.</p>
             </div>
           </div>
 
@@ -147,7 +156,7 @@ export function Copilot() {
             <div className="copilot-starter">
               <div className="copilot-starter-copy">
                 <Sparkles size={19}/>
-                <div><strong>Start with a useful question</strong><span>Type it or tap the microphone. I will answer from {sources.length} source records and show exactly where each fact came from.</span></div>
+                <div><strong>Start with a useful question</strong><span>Type it or tap the microphone. I will answer from {sources.length} source records and {activeMemories.length} explicit memory items.</span></div>
               </div>
               <div className="copilot-suggestion-grid">
                 {suggestions.map((suggestion) => <button key={suggestion} onClick={() => void ask(suggestion)}>{suggestion}<ChevronRight size={16}/></button>)}
@@ -157,7 +166,12 @@ export function Copilot() {
 
           <div className="copilot-thread" aria-live="polite">
             {messages.map((message) => message.role === 'user' ? (
-              <div className="copilot-message user" key={message.id}><div>{message.text}</div></div>
+              <div className="copilot-message user" key={message.id}>
+                <div className="copilot-user-message">
+                  <div className="copilot-user-bubble">{message.text}</div>
+                  <div className="copilot-message-memory"><button className={message.memorySaved ? 'saved' : ''} onClick={() => rememberMessage(message)} disabled={message.memorySaved}><BookmarkPlus size={13}/>{message.memorySaved ? 'Remembered' : 'Remember this'}</button></div>
+                </div>
+              </div>
             ) : (
               <article className="copilot-answer" key={message.id}>
                 <div className="copilot-answer-header">
@@ -183,7 +197,7 @@ export function Copilot() {
                 {message.result?.follow_up_prompts.length ? <div className="copilot-followups">{message.result.follow_up_prompts.map((prompt) => <button key={prompt} onClick={() => void ask(prompt)}>{prompt}</button>)}</div> : null}
               </article>
             ))}
-            {loading && <div className="copilot-thinking"><LoaderCircle size={18}/><span>Reading your timeline and source records…</span></div>}
+            {loading && <div className="copilot-thinking"><LoaderCircle size={18}/><span>Reading your timeline, sources, and chosen memory…</span></div>}
           </div>
 
           {error && <div className="copilot-error"><AlertTriangle size={17}/><span>{error}</span></div>}
@@ -194,26 +208,27 @@ export function Copilot() {
             <VoiceInputButton onTranscript={appendTranscript} disabled={loading} />
             <button type="submit" disabled={!question.trim() || loading} aria-label="Ask Health Copilot"><Send size={19}/></button>
           </form>
-          <p className="copilot-boundary">Vital Passport explains your records and helps you prepare. It does not diagnose conditions or tell you to change treatment.</p>
+          <p className="copilot-boundary">Conversation text is not remembered automatically. Use “Remember this” when context should persist.</p>
         </section>
 
         <aside className="copilot-memory-panel">
-          <div className="memory-panel-heading"><span><Sparkles size={20}/></span><div><div className="eyebrow">Your living record</div><h2>{patient.firstName}’s health memory</h2></div></div>
+          <div className="memory-panel-heading"><span><Brain size={20}/></span><div><div className="eyebrow">Patient-controlled memory</div><h2>{patient.firstName}’s chosen context</h2></div></div>
           <div className="memory-stats">
             <div><strong>{sources.length}</strong><span>source records</span></div>
-            <div><strong>{timelineEvents.length}</strong><span>timeline events</span></div>
+            <div><strong>{activeMemories.length}</strong><span>memory items</span></div>
             <div><strong>{medicationSummaries.length}</strong><span>medications</span></div>
             <div><strong>{openTasks.length}</strong><span>open actions</span></div>
           </div>
 
           <div className="memory-status-list">
+            <button className="memory-link" onClick={() => navigate('/memory')}><Brain size={18}/><span><strong>Manage Copilot memory</strong><small>Review, edit, or forget every item Copilot carries forward.</small></span><ChevronRight size={16}/></button>
             <button onClick={() => navigate('/timeline')}><History size={18}/><span><strong>Latest change</strong><small>{newestEvent ? `${newestEvent.displayDate}: ${newestEvent.title}` : 'Add health information to begin your timeline.'}</small></span><ChevronRight size={16}/></button>
             <button onClick={() => navigate('/prepare')} className={openConflicts.length ? 'attention' : ''}><AlertTriangle size={18}/><span><strong>{openConflicts.length} unresolved {openConflicts.length === 1 ? 'conflict' : 'conflicts'}</strong><small>{openConflicts.length ? 'Confirm which source reflects what you are doing now.' : 'Medication sources are reconciled.'}</small></span><ChevronRight size={16}/></button>
             <button onClick={() => navigate('/prepare')} className={unresolvedGaps.length ? 'attention' : ''}><CircleHelp size={18}/><span><strong>{unresolvedGaps.length} missing {unresolvedGaps.length === 1 ? 'detail' : 'details'}</strong><small>{unresolvedGaps.length ? 'Your documents cannot answer these without you.' : 'Patient context is complete for this visit.'}</small></span><ChevronRight size={16}/></button>
             <button onClick={() => navigate('/brief')}><CalendarClock size={18}/><span><strong>Ready to travel</strong><small>Turn this history into a focused brief for any clinician.</small></span><ChevronRight size={16}/></button>
           </div>
 
-          <button className="button primary memory-primary" onClick={() => navigate('/add')}>Add to my health memory <ArrowRight size={17}/></button>
+          <button className="button primary memory-primary" onClick={() => navigate('/memory')}>Open memory controls <ArrowRight size={17}/></button>
         </aside>
       </div>
     </div>
