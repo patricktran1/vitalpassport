@@ -1,0 +1,17 @@
+name: OpenEMR adapter syntax
+on:
+  pull_request:
+    paths:
+      - 'api/openemr-import-v2.js'
+      - 'vercel.json'
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --check api/openemr-import-v2.js
+      - run: npm ci
+      - run: npm run build
