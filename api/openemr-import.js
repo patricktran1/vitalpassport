@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 const DEFAULT_SITE = 'default'
 const REQUIRED_STANDARD_SCOPES = ['api:oemr', 'user/patient.crus', 'user/document.crs']
 const FHIR_DOCUMENT_SCOPE = 'user/DocumentReference.rs'
@@ -8,15 +10,25 @@ function sendJson(res, status, body) {
   res.end(JSON.stringify(body))
 }
 
+function canonicalDocumentPath(value) {
+  const raw = String(value || '/Patient_Documents').trim() || '/Patient_Documents'
+  const parts = raw.split('/').filter(Boolean).map((part) => part.trim().replace(/\s+/g, '_'))
+  return `/${parts.join('/')}`
+}
+
+function displayDocumentPath(path) {
+  return String(path || '').replaceAll('_', ' ')
+}
+
 function configuration() {
   const baseUrl = String(process.env.OPENEMR_BASE_URL || '').replace(/\/+$/, '')
   const site = String(process.env.OPENEMR_SITE || DEFAULT_SITE).trim() || DEFAULT_SITE
-  const documentPath = String(process.env.OPENEMR_DOCUMENT_PATH || '/Patient Documents').trim() || '/Patient Documents'
+  const documentPath = canonicalDocumentPath(process.env.OPENEMR_DOCUMENT_PATH || '/Patient_Documents')
   const encodedSite = encodeURIComponent(site)
   return {
     baseUrl,
     site,
-    documentPath: documentPath.startsWith('/') ? documentPath : `/${documentPath}`,
+    documentPath,
     apiBase: baseUrl ? `${baseUrl}/apis/${encodedSite}/api` : '',
     fhirBase: baseUrl ? `${baseUrl}/apis/${encodedSite}/fhir` : '',
   }
@@ -117,7 +129,62 @@ async function resolveNumericPid(config, accessToken, patientUuid) {
 }
 
 function candidatePaths(primary) {
-  return [...new Set([primary, '/Patient Documents', '/Medical Record', '/Documents'].filter(Boolean))]
+  return [...new Set([
+    canonicalDocumentPath(primary),
+    '/Patient_Documents',
+    '/Medical_Record/Patient_Documents',
+    '/Medical_Record',
+    '/Documents',
+  ].filter(Boolean))]
+}
+
+function standardDocumentRows(body) {
+  if (Array.isArray(body?.data)) return body.data
+  if (Array.isArray(body)) return body
+  return []
+}
+
+function contentHash(content) {
+  return createHash('sha3-512').update(content, 'utf8').digest('hex')
+}
+
+async function verifyPatientDocumentThroughStandardApi(config, accessToken, pid, path, filename, expectedHash) {
+  const query = new URLSearchParams({ path })
+  const url = `${config.apiBase}/patient/${encodeURIComponent(pid)}/document?${query.toString()}`
+  let lastRows = []
+
+  for (const delayMs of [0, 300, 1000, 2000]) {
+    if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs))
+    try {
+      const { body } = await fetchOpenEmr(url, { headers: authHeaders(accessToken) })
+      if (hasResponseErrors(body?.validationErrors) || hasResponseErrors(body?.internalErrors)) {
+        throw new Error(extractError(body, `OpenEMR could not list documents in ${path}.`))
+      }
+      lastRows = standardDocumentRows(body)
+      const match = lastRows.find((item) => {
+        const rowName = String(item?.filename || item?.name || '')
+        const rowHash = String(item?.hash || '').toLowerCase()
+        return rowName === filename || (expectedHash && rowHash === expectedHash)
+      })
+      if (match) {
+        return {
+          id: String(match.id || match.document_id || match.uuid || ''),
+          filename: String(match.filename || match.name || filename),
+          mimetype: String(match.mimetype || ''),
+          docdate: String(match.docdate || match.date || ''),
+          hash: String(match.hash || expectedHash || ''),
+          verificationMethod: 'OpenEMR native document list',
+        }
+      }
+    } catch (error) {
+      const status = Number(error?.status) || 0
+      if (status === 401 || status === 403) throw error
+      if (status === 404) return { unsupported: true, rows: [] }
+      throw error
+    }
+  }
+
+  return { unsupported: false, rows: lastRows }
 }
 
 function bundleResources(body) {
@@ -143,8 +210,9 @@ function categoryLabels(resource) {
 async function verifyPatientDocumentThroughFhir(config, accessToken, patientUuid, filename) {
   const patientValues = [patientUuid, `Patient/${patientUuid}`]
   let lastError = null
+  let observedTitles = []
 
-  for (const delayMs of [0, 500, 1500]) {
+  for (const delayMs of [0, 500, 1500, 3000]) {
     if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs))
 
     for (const patient of patientValues) {
@@ -153,7 +221,9 @@ async function verifyPatientDocumentThroughFhir(config, accessToken, patientUuid
         const { body } = await fetchOpenEmr(`${config.fhirBase}/DocumentReference?${query.toString()}`, {
           headers: authHeaders(accessToken, 'application/fhir+json, application/json'),
         })
-        const match = bundleResources(body).find((resource) => attachmentForFilename(resource, filename))
+        const resources = bundleResources(body)
+        observedTitles = [...new Set(resources.flatMap((resource) => (resource?.content || []).map((item) => String(item?.attachment?.title || '')).filter(Boolean)))]
+        const match = resources.find((resource) => attachmentForFilename(resource, filename))
         if (!match) continue
         const attachment = attachmentForFilename(match, filename)
         return {
@@ -163,6 +233,7 @@ async function verifyPatientDocumentThroughFhir(config, accessToken, patientUuid
           docdate: String(match.date || match.meta?.lastUpdated || ''),
           binaryUrl: String(attachment?.url || ''),
           categories: categoryLabels(match),
+          verificationMethod: 'FHIR DocumentReference search',
         }
       } catch (error) {
         lastError = error
@@ -178,11 +249,19 @@ async function verifyPatientDocumentThroughFhir(config, accessToken, patientUuid
   }
 
   if (lastError && Number(lastError?.status) !== 404) throw lastError
-  return null
+  return { observedTitles }
+}
+
+function diagnosticNames(rows, max = 6) {
+  return rows
+    .map((item) => String(item?.filename || item?.name || ''))
+    .filter(Boolean)
+    .slice(0, max)
 }
 
 async function uploadPatientDocument(config, accessToken, pid, patientUuid, filename, content) {
   const attempts = []
+  const expectedHash = contentHash(content)
 
   for (const path of candidatePaths(config.documentPath)) {
     const query = new URLSearchParams({ path })
@@ -195,7 +274,7 @@ async function uploadPatientDocument(config, accessToken, pid, patientUuid, file
         headers: authHeaders(accessToken),
         body: form,
       })
-      const failed = body?.data === false || hasResponseErrors(body?.internalErrors) || hasResponseErrors(body?.validationErrors)
+      const failed = body === false || body?.data === false || hasResponseErrors(body?.internalErrors) || hasResponseErrors(body?.validationErrors)
       if (failed) throw new Error(extractError(body, `OpenEMR declined the document path ${path}.`))
     } catch (error) {
       const status = Number(error?.status) || 0
@@ -204,12 +283,21 @@ async function uploadPatientDocument(config, accessToken, pid, patientUuid, file
       continue
     }
 
-    const verified = await verifyPatientDocumentThroughFhir(config, accessToken, patientUuid, filename)
-    if (!verified) {
-      throw new Error(`OpenEMR acknowledged the upload to ${path}, but the exact filename did not appear in Maria's FHIR DocumentReference list.`)
+    const nativeVerification = await verifyPatientDocumentThroughStandardApi(config, accessToken, pid, path, filename, expectedHash)
+    if (nativeVerification?.id) {
+      return { path, categories: [displayDocumentPath(path).replace(/^\//, '')], binaryUrl: '', ...nativeVerification }
     }
 
-    return { path, ...verified }
+    const fhirVerification = await verifyPatientDocumentThroughFhir(config, accessToken, patientUuid, filename)
+    if (fhirVerification?.id) return { path, hash: expectedHash, ...fhirVerification }
+
+    const nativeNames = diagnosticNames(nativeVerification?.rows || [])
+    const fhirNames = (fhirVerification?.observedTitles || []).slice(0, 6)
+    const details = [
+      nativeVerification?.unsupported ? 'native list route unavailable' : `native list titles: ${nativeNames.length ? nativeNames.join(', ') : 'none'}`,
+      `FHIR titles: ${fhirNames.length ? fhirNames.join(', ') : 'none'}`,
+    ].join('; ')
+    throw new Error(`OpenEMR accepted the upload to ${path}, but could not verify the exact document afterward (${details}).`)
   }
 
   throw new Error(`OpenEMR could not store the intake in a document category. Tried ${attempts.join(' | ')}`)
@@ -247,12 +335,17 @@ export default async function handler(req, res) {
     const uploaded = await uploadPatientDocument(config, accessToken, pid, patientId, filename, content)
 
     const warnings = []
-    if (scopeClaimMismatch) warnings.push(`OpenEMR's token response did not list all expected Standard API scopes (${REQUIRED_STANDARD_SCOPES.join(', ')}), but the native upload and FHIR verification succeeded.`)
+    if (scopeClaimMismatch) warnings.push(`OpenEMR's token response did not list all expected Standard API scopes (${REQUIRED_STANDARD_SCOPES.join(', ')}), but the native upload and verification succeeded.`)
     if (options.includeLabs && (packet.labs || []).length) warnings.push(`${packet.labs.length} laboratory result${packet.labs.length === 1 ? '' : 's'} were included in the intake document because this OpenEMR capability statement does not advertise Observation creation.`)
     if (options.includeConditions && (packet.patient.conditions || []).length) warnings.push('Conditions remained in the reviewed intake document; no duplicate problem-list entries were created.')
     if (options.includeAllergies && (packet.patient.allergies || []).length) warnings.push('Allergy statements remained in the reviewed intake document; no duplicate allergy entries were created.')
     if (options.includeProvenance) warnings.push('Source provenance is embedded in the intake document and receipt; no separate FHIR Provenance resource was created for the native OpenEMR document upload.')
     if ((packet.medications || []).some((item) => item.status !== 'confirmed')) warnings.push('Medication discrepancies were included in the intake document only. No medication orders were created.')
+
+    const resourceType = uploaded.verificationMethod === 'FHIR DocumentReference search' ? 'DocumentReference' : 'PatientDocument'
+    const location = resourceType === 'DocumentReference'
+      ? `${config.fhirBase}/DocumentReference/${encodeURIComponent(uploaded.id)}`
+      : `${config.apiBase}/patient/${encodeURIComponent(pid)}/document/${encodeURIComponent(uploaded.id)}`
 
     return sendJson(res, 200, {
       status: 'success',
@@ -260,9 +353,9 @@ export default async function handler(req, res) {
       patientId,
       openEmr: { baseUrl: config.baseUrl, site: config.site, software: 'OpenEMR', version: '' },
       resources: [{
-        resourceType: 'DocumentReference',
+        resourceType,
         id: uploaded.id,
-        location: `${config.fhirBase}/DocumentReference/${encodeURIComponent(uploaded.id)}`,
+        location,
         status: 'verified',
       }],
       failures: [],
@@ -275,8 +368,9 @@ export default async function handler(req, res) {
         mimetype: uploaded.mimetype,
         docdate: uploaded.docdate,
         binaryUrl: uploaded.binaryUrl,
+        hash: uploaded.hash,
         verified: true,
-        verificationMethod: 'FHIR DocumentReference search',
+        verificationMethod: uploaded.verificationMethod,
       },
     })
   } catch (error) {
