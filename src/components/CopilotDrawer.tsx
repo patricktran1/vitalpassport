@@ -1,6 +1,7 @@
-import { AlertTriangle, ArrowRight, BookOpenCheck, Bot, ChevronRight, CircleHelp, ExternalLink, FileSearch, History, LoaderCircle, MessageCircleMore, Send, Sparkles, X } from 'lucide-react'
+import { AlertTriangle, ArrowRight, BookOpenCheck, BookmarkPlus, Bot, Brain, ChevronRight, CircleHelp, ExternalLink, FileSearch, History, LoaderCircle, MessageCircleMore, Send, Sparkles, X } from 'lucide-react'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useCopilotMemory } from '../context/CopilotMemoryContext'
 import { useVital } from '../context/VitalContext'
 import { askHealthCopilot, buildHealthRecordSnapshot, type CopilotResult, type CopilotSignalKind } from '../lib/copilot'
 import { VoiceInputButton } from './VoiceInputButton'
@@ -10,6 +11,7 @@ type ChatMessage = {
   role: 'user' | 'assistant'
   text: string
   result?: CopilotResult
+  memorySaved?: boolean
 }
 
 type CopilotDrawerProps = {
@@ -21,7 +23,7 @@ type CopilotDrawerProps = {
 const suggestions = [
   'What changed recently?',
   'What should I clarify before my next visit?',
-  'Summarize my medications and any conflicts.',
+  'What do you remember about my goals?',
 ]
 
 const signalIcons: Record<CopilotSignalKind, typeof History> = {
@@ -52,6 +54,7 @@ export function CopilotDrawer({ open, promptRequest, onClose }: CopilotDrawerPro
     reviewGaps,
     openSource,
   } = useVital()
+  const { activeMemories, remember } = useCopilotMemory()
   const [messages, setMessages] = useState<ChatMessage[]>(readMessages)
   const [question, setQuestion] = useState('')
   const [loading, setLoading] = useState(false)
@@ -68,7 +71,8 @@ export function CopilotDrawer({ open, promptRequest, onClose }: CopilotDrawerPro
     reconciliationIssues,
     careTasks,
     reviewGaps,
-  }), [sources, timelineEvents, medicationSummaries, labResults, reconciliationIssues, careTasks, reviewGaps])
+    memories: activeMemories,
+  }), [sources, timelineEvents, medicationSummaries, labResults, reconciliationIssues, careTasks, reviewGaps, activeMemories])
 
   useEffect(() => {
     window.sessionStorage.setItem('vital-copilot-messages', JSON.stringify(messages.slice(-12)))
@@ -135,6 +139,11 @@ export function CopilotDrawer({ open, promptRequest, onClose }: CopilotDrawerPro
     window.setTimeout(() => textareaRef.current?.focus(), 40)
   }
 
+  const rememberMessage = (message: ChatMessage) => {
+    remember({ kind: 'context', title: 'Saved from Health Copilot', value: message.text, origin: 'copilot' })
+    setMessages((current) => current.map((item) => item.id === message.id ? { ...item, memorySaved: true } : item))
+  }
+
   const goTo = (route: string) => {
     onClose()
     navigate(route)
@@ -159,6 +168,7 @@ export function CopilotDrawer({ open, promptRequest, onClose }: CopilotDrawerPro
             <div><small>Vital Passport</small><strong>Health Copilot</strong></div>
           </div>
           <div className="copilot-drawer-header-actions">
+            <button onClick={() => goTo('/memory')}><Brain size={16}/><span>Memory</span></button>
             <button onClick={() => goTo('/copilot')}><ExternalLink size={16}/><span>Full view</span></button>
             <button className="icon-button" onClick={onClose} aria-label="Close Health Copilot"><X size={20}/></button>
           </div>
@@ -169,7 +179,7 @@ export function CopilotDrawer({ open, promptRequest, onClose }: CopilotDrawerPro
             <div className="copilot-starter copilot-drawer-starter">
               <div className="copilot-starter-copy">
                 <Sparkles size={18}/>
-                <div><strong>Ask your living health record</strong><span>I connect {sources.length} sources and show where every answer came from.</span></div>
+                <div><strong>Ask your living health record</strong><span>I connect {sources.length} sources and {activeMemories.length} memory items. Nothing new is remembered unless you choose it.</span></div>
               </div>
               <div className="copilot-suggestion-grid">
                 {suggestions.map((suggestion) => <button key={suggestion} onClick={() => void ask(suggestion)}>{suggestion}<ChevronRight size={15}/></button>)}
@@ -179,7 +189,12 @@ export function CopilotDrawer({ open, promptRequest, onClose }: CopilotDrawerPro
 
           <div className="copilot-thread copilot-drawer-thread" ref={threadRef} aria-live="polite">
             {messages.map((message) => message.role === 'user' ? (
-              <div className="copilot-message user" key={message.id}><div>{message.text}</div></div>
+              <div className="copilot-message user" key={message.id}>
+                <div className="copilot-user-message">
+                  <div className="copilot-user-bubble">{message.text}</div>
+                  <div className="copilot-message-memory"><button className={message.memorySaved ? 'saved' : ''} onClick={() => rememberMessage(message)} disabled={message.memorySaved}><BookmarkPlus size={12}/>{message.memorySaved ? 'Remembered' : 'Remember this'}</button></div>
+                </div>
+              </div>
             ) : (
               <article className="copilot-answer" key={message.id}>
                 <div className="copilot-answer-header">
@@ -205,7 +220,7 @@ export function CopilotDrawer({ open, promptRequest, onClose }: CopilotDrawerPro
                 {message.result?.follow_up_prompts.length ? <div className="copilot-followups">{message.result.follow_up_prompts.map((prompt) => <button key={prompt} onClick={() => void ask(prompt)}>{prompt}</button>)}</div> : null}
               </article>
             ))}
-            {loading && <div className="copilot-thinking"><LoaderCircle size={18}/><span>Reading your timeline and sources…</span></div>}
+            {loading && <div className="copilot-thinking"><LoaderCircle size={18}/><span>Reading your timeline, sources, and chosen memory…</span></div>}
           </div>
 
           {error && <div className="copilot-error"><AlertTriangle size={17}/><span>{error}</span></div>}
@@ -216,7 +231,7 @@ export function CopilotDrawer({ open, promptRequest, onClose }: CopilotDrawerPro
             <VoiceInputButton onTranscript={appendTranscript} disabled={loading} />
             <button type="submit" disabled={!question.trim() || loading} aria-label="Ask Health Copilot"><Send size={18}/></button>
           </form>
-          <p className="copilot-boundary">Explains your record and preserves uncertainty. It does not diagnose or change treatment.</p>
+          <p className="copilot-boundary">Conversation text is not remembered automatically. Saved memory stays visible and editable.</p>
         </section>
       </aside>
     </>
