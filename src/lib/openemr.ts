@@ -52,6 +52,7 @@ export interface OpenEmrImportReceipt {
 const TOKEN_KEY = 'vital-openemr-token'
 const PKCE_KEY = 'vital-openemr-pkce'
 const RECEIPT_KEY = 'vital-openemr-receipt'
+const STANDARD_DOCUMENT_SCOPES = ['api:oemr', 'user/patient.crus', 'user/document.crs']
 
 async function api<T>(op: string, body?: unknown): Promise<T> {
   const response = await fetch(`/api/openemr?op=${encodeURIComponent(op)}`, {
@@ -86,6 +87,17 @@ async function patientSearchApi<T>(body: unknown): Promise<T> {
   return payload as T
 }
 
+async function documentImportApi<T>(body: unknown): Promise<T> {
+  const response = await fetch('/api/openemr-import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(payload.error || `OpenEMR document upload failed (${response.status}).`)
+  return payload as T
+}
+
 function base64Url(bytes: Uint8Array) {
   let binary = ''
   bytes.forEach((byte) => { binary += String.fromCharCode(byte) })
@@ -101,8 +113,14 @@ async function challengeFor(verifier: string) {
   return base64Url(new Uint8Array(digest))
 }
 
-export function getOpenEmrConfig() {
-  return api<OpenEmrConfig>('config')
+function withRequiredDocumentScopes(config: OpenEmrConfig): OpenEmrConfig {
+  const scopes = new Set(config.scopes.split(/\s+/).filter(Boolean))
+  STANDARD_DOCUMENT_SCOPES.forEach((scope) => scopes.add(scope))
+  return { ...config, scopes: [...scopes].join(' ') }
+}
+
+export async function getOpenEmrConfig() {
+  return withRequiredDocumentScopes(await api<OpenEmrConfig>('config'))
 }
 
 export function discoverOpenEmr() {
@@ -174,7 +192,13 @@ export async function searchOpenEmrPatients(query: { name?: string; birthDate?: 
 export async function importOpenEmrPacket(patientId: string, packet: SharedBriefPacket, options: OpenEmrImportOptions) {
   const token = readOpenEmrToken()
   if (!token) throw new Error('Connect OpenEMR before importing.')
-  const receipt = await api<OpenEmrImportReceipt>('import', { accessToken: token.accessToken, patientId, packet, options })
+  const receipt = await documentImportApi<OpenEmrImportReceipt>({
+    accessToken: token.accessToken,
+    grantedScope: token.scope,
+    patientId,
+    packet,
+    options,
+  })
   window.localStorage.setItem(RECEIPT_KEY, JSON.stringify(receipt))
   return receipt
 }
@@ -214,7 +238,7 @@ export const demoOpenEmrPatients: OpenEmrPatient[] = [
 
 export function createDemoOpenEmrReceipt(patientId: string, packet: SharedBriefPacket, options: OpenEmrImportOptions): OpenEmrImportReceipt {
   const resources = [
-    { resourceType: 'DocumentReference', id: 'doc-demo-001', location: `DocumentReference/doc-demo-001`, status: 'created' },
+    { resourceType: 'PatientDocument', id: 'doc-demo-001', location: `PatientDocument/doc-demo-001`, status: 'created' },
     ...(options.includeLabs ? packet.labs.map((_, index) => ({ resourceType: 'Observation', id: `obs-demo-${index + 1}`, location: `Observation/obs-demo-${index + 1}`, status: 'created' })) : []),
     ...(options.includeConditions ? packet.patient.conditions.map((_, index) => ({ resourceType: 'Condition', id: `condition-demo-${index + 1}`, location: `Condition/condition-demo-${index + 1}`, status: 'created' })) : []),
     ...(options.includeProvenance ? [{ resourceType: 'Provenance', id: 'provenance-demo-001', location: 'Provenance/provenance-demo-001', status: 'created' }] : []),
