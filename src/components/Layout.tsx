@@ -1,4 +1,4 @@
-import { ArrowUpFromLine, Bot, CalendarDays, ClipboardList, FileHeart, Home, Menu, PlusCircle, RotateCcw, ShieldCheck, Sparkles, X } from 'lucide-react'
+import { ArrowUpFromLine, Bot, CalendarDays, ChevronRight, ClipboardList, FileHeart, Home, Menu, PlusCircle, RotateCcw, ShieldCheck, Sparkles, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { patient } from '../data/demo'
@@ -60,7 +60,7 @@ export function Layout() {
           <NavLink to="/" end onClick={() => setMobileOpen(false)} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <Home size={19}/><span>Health home</span>
           </NavLink>
-          <button className={`nav-item copilot-nav-trigger ${copilotOpen ? 'active' : ''}`} onClick={() => openCopilot()}>
+          <button className={`nav-item copilot-nav-trigger ${copilotOpen ? 'active' : ''}`} onClick={() => openCopilot()} aria-expanded={copilotOpen}>
             <Bot size={19}/><span>Health Copilot</span><Sparkles size={14}/>
           </button>
           {navItems.slice(1).map(({ to, label, icon: Icon }) => (
@@ -105,8 +105,13 @@ export function Layout() {
       </main>
       {mobileOpen && <button className="sidebar-overlay" aria-label="Close menu" onClick={() => setMobileOpen(false)} />}
       {location.pathname !== '/copilot' && !copilotOpen && (
-        <button className="copilot-drawer-launcher" onClick={() => openCopilot()} aria-label="Open Health Copilot">
-          <span><Bot size={21}/></span><strong>Ask Health Copilot</strong><Sparkles size={15}/>
+        <button className="copilot-drawer-launcher" onClick={() => openCopilot()} aria-label="Open Health Copilot" aria-expanded="false">
+          <span><Bot size={21}/></span><strong>Health Copilot</strong><Sparkles size={15}/>
+        </button>
+      )}
+      {location.pathname !== '/copilot' && copilotOpen && (
+        <button className="copilot-drawer-collapse-tab" onClick={() => setCopilotOpen(false)} aria-label="Collapse Health Copilot" aria-expanded="true">
+          <ChevronRight size={20}/><span>Close</span>
         </button>
       )}
       <CopilotDrawer open={copilotOpen} promptRequest={promptRequest} onClose={() => setCopilotOpen(false)} />
