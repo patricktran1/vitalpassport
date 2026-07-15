@@ -1,8 +1,9 @@
-import { Camera, CheckCircle2, FileText, HelpCircle, Mic, Pill, Plus, ShieldCheck, Sparkles, Stethoscope, TestTube2, TriangleAlert, UploadCloud, WandSparkles, X } from 'lucide-react'
+import { ArrowRight, Camera, CheckCircle2, Database, FileText, GitCompareArrows, HelpCircle, ListChecks, Mic, Pill, Plus, ShieldCheck, Sparkles, Stethoscope, TestTube2, TriangleAlert, UploadCloud, WandSparkles, X } from 'lucide-react'
 import { useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useVital } from '../context/VitalContext'
 import { ExtractionError, extractHealthItem, imageFileToDataUrl } from '../lib/extraction'
-import type { HealthExtraction, HealthItemType } from '../types'
+import type { HealthExtraction, HealthItemType, IngestionSummary } from '../types'
 
 const options: Array<{type: HealthItemType; label: string; help: string; icon: typeof Camera}> = [
   { type:'photo', label:'Take or upload a photo', help:'Concern, medication, device, or paperwork', icon:Camera },
@@ -53,6 +54,7 @@ export function AddHealth() {
   const [selected, setSelected] = useState<HealthItemType | null>(null)
   const [processing, setProcessing] = useState(false)
   const [extraction, setExtraction] = useState<HealthExtraction | null>(null)
+  const [ingestionSummary,setIngestionSummary]=useState<IngestionSummary | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [textValue,setTextValue]=useState('')
   const [error,setError]=useState('')
@@ -61,7 +63,7 @@ export function AddHealth() {
   const fileRef = useRef<HTMLInputElement>(null)
   const { addUpload } = useVital()
 
-  const clearWorkspace=()=>{setSelected(null);setExtraction(null);setSelectedFile(null);setTextValue('');setError('');setSetupNeeded(false);setDemoLoaded(false)}
+  const clearWorkspace=()=>{setSelected(null);setExtraction(null);setIngestionSummary(null);setSelectedFile(null);setTextValue('');setError('');setSetupNeeded(false);setDemoLoaded(false)}
 
   const processItem = async () => {
     if (!selected || (!selectedFile && !textValue.trim())) return
@@ -70,12 +72,7 @@ export function AddHealth() {
     setSetupNeeded(false)
     try {
       const imageDataUrl = selectedFile ? await imageFileToDataUrl(selectedFile) : undefined
-      const result = await extractHealthItem({
-        kind:selected,
-        text:textValue.trim() || undefined,
-        imageDataUrl,
-        fileName:selectedFile?.name,
-      })
+      const result = await extractHealthItem({ kind:selected, text:textValue.trim() || undefined, imageDataUrl, fileName:selectedFile?.name })
       setExtraction(result)
     } catch (caught) {
       const extractionError = caught instanceof ExtractionError ? caught : new ExtractionError('Vital Passport could not organize this item.')
@@ -93,22 +90,40 @@ export function AddHealth() {
 
   const saveItem = () => {
     if (!selected || !extraction) return
-    addUpload({ id:`upload-${Date.now()}`, name:extraction.title, type:selected, date:'Today', status:'ready', summary:extraction.summary, extraction })
-    clearWorkspace()
+    const summary=addUpload({ id:`upload-${Date.now()}`, name:extraction.title, type:selected, date:'Today', status:'ready', summary:extraction.summary, extraction })
+    setIngestionSummary(summary)
+    setExtraction(null)
+    setSelectedFile(null)
+    setTextValue('')
   }
 
   return <div className="page">
-    <section className="page-heading"><div className="eyebrow">Nebius + Meta Llama</div><h1>Add health information</h1><p>Photograph a medication label, lab report, or visit summary. Vital Passport extracts only source-supported facts, preserves uncertainty, and asks you to confirm what matters.</p></section>
+    <section className="page-heading"><div className="eyebrow">Nebius + Meta Llama</div><h1>Add health information</h1><p>Photograph a medication label, lab report, or visit summary. Vital Passport extracts the facts, reconciles them against the existing record, and creates the next actions automatically.</p></section>
 
     {!selected && <div className="capture-grid">{options.map(({type,label,help,icon:Icon}) => <button className="capture-card" key={type} onClick={() => setSelected(type)}><span className="capture-icon"><Icon size={23}/></span><span><strong>{label}</strong><small>{help}</small></span><Plus size={19}/></button>)}</div>}
 
     {selected && <section className="card capture-workspace">
       <div className="card-heading"><div><div className="eyebrow">New item</div><h2>{options.find(o=>o.type===selected)?.label}</h2></div><button className="icon-button" onClick={clearWorkspace}><X size={20}/></button></div>
 
-      {!processing && !extraction && <>
+      {ingestionSummary&&<div className="ingestion-success">
+        <div className="success-mark"><Database size={23}/></div>
+        <div className="eyebrow">Health story updated</div>
+        <h2>The source was structured and reconciled.</h2>
+        <p>Vital Passport preserved the original source, added the clinical objects, compared them with the existing record, and updated the clinician brief.</p>
+        <div className="ingestion-metrics">
+          <div><Pill size={18}/><strong>{ingestionSummary.medicationsAdded}</strong><span>medications added</span></div>
+          <div><TestTube2 size={18}/><strong>{ingestionSummary.labsAdded}</strong><span>lab results added</span></div>
+          <div className={ingestionSummary.conflictsFound?'attention':''}><GitCompareArrows size={18}/><strong>{ingestionSummary.conflictsFound}</strong><span>conflicts found</span></div>
+          <div><ListChecks size={18}/><strong>{ingestionSummary.tasksCreated}</strong><span>tasks created</span></div>
+        </div>
+        {ingestionSummary.conflictsFound>0&&<div className="reconciliation-callout"><TriangleAlert size={18}/><span>A new discrepancy needs patient confirmation before the clinician brief is fully reconciled.</span></div>}
+        <div className="button-row"><button className="button ghost" onClick={()=>setIngestionSummary(null)}>Add another item</button><Link className="button primary" to="/">Open reconciliation center <ArrowRight size={16}/></Link></div>
+      </div>}
+
+      {!processing && !extraction && !ingestionSummary && <>
         {filePreferred.includes(selected)&&<>
           <button className={`drop-zone ${selectedFile?'has-file':''}`} onClick={()=>fileRef.current?.click()}><UploadCloud size={34}/><strong>{selectedFile?.name || 'Choose a photo'}</strong><span>JPG, PNG, or WebP · images are resized before analysis</span></button>
-          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,.pdf" hidden onChange={(e)=>{setSelectedFile(e.target.files?.[0] || null);setError('');setDemoLoaded(false)}}/>
+          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e)=>{setSelectedFile(e.target.files?.[0] || null);setError('');setDemoLoaded(false)}}/>
           <div className="or-divider"><span>or add the information manually</span></div>
         </>}
         <textarea className="large-input" value={textValue} onChange={e=>{setTextValue(e.target.value);setDemoLoaded(false)}} placeholder={inputCopy[selected].placeholder} rows={5}/>
@@ -117,7 +132,7 @@ export function AddHealth() {
         <button className="button primary full" disabled={!selectedFile&&!textValue.trim()} onClick={processItem}><Sparkles size={17}/> Extract with Llama</button>
       </>}
 
-      {processing && <div className="processing-state"><div className="processing-orbit"><Sparkles size={24}/></div><h3>Reading the source with Llama</h3><p>Extracting dates, medications, results, instructions, exact evidence, and anything that requires patient confirmation.</p><div className="processing-lines"><span/><span/><span/></div></div>}
+      {processing && <div className="processing-state"><div className="processing-orbit"><Sparkles size={24}/></div><h3>Reading and reconciling the source</h3><p>Extracting source-supported facts, comparing medication instructions, checking lab history, and preparing patient follow-up tasks.</p><div className="processing-lines"><span/><span/><span/></div></div>}
 
       {extraction && <div className="extraction-result live-result">
         <div className={`success-mark ${extraction.requires_confirmation?'attention':''}`}>{extraction.requires_confirmation?<TriangleAlert size={22}/>:<CheckCircle2 size={22}/>}</div>
@@ -125,13 +140,13 @@ export function AddHealth() {
         {setupNeeded&&<div className="setup-banner"><ShieldCheck size={17}/><span>This preview used synthetic fallback data. Add the Nebius key in Vercel to activate live extraction.</span></div>}
         <div className="eyebrow">Patient review required</div><h2>{extraction.title}</h2><p>{extraction.summary}</p>
         <div className="extracted-fields">{extractionRows(extraction).map(([label,value],index)=><div key={`${label}-${index}`}><span>{label}</span><strong>{value}</strong></div>)}</div>
-        {extraction.evidence.length>0&&<div className="evidence-panel"><div className="evidence-heading"><FileText size={16}/><strong>Source evidence</strong><span>Click-through provenance for the future health record</span></div>{extraction.evidence.slice(0,6).map((item,index)=><div className="evidence-row" key={`${item.field}-${index}`}><div><span>{item.field}</span><strong>{item.value}</strong><blockquote>“{item.quote}”</blockquote></div><small>{Math.round(item.confidence*100)}%</small></div>)}</div>}
+        {extraction.evidence.length>0&&<div className="evidence-panel"><div className="evidence-heading"><FileText size={16}/><strong>Source evidence</strong><span>Exact provenance retained with the health record</span></div>{extraction.evidence.slice(0,6).map((item,index)=><div className="evidence-row" key={`${item.field}-${index}`}><div><span>{item.field}</span><strong>{item.value}</strong><blockquote>“{item.quote}”</blockquote></div><small>{Math.round(item.confidence*100)}%</small></div>)}</div>}
         {extraction.warnings.length>0&&<div className="warning-list">{extraction.warnings.map((warning)=><div key={warning}><TriangleAlert size={15}/><span>{warning}</span></div>)}</div>}
-        <div className={`confirmation-state ${extraction.requires_confirmation?'attention':''}`}><ShieldCheck size={18}/><div><strong>{extraction.requires_confirmation?'Confirm before adding':'Ready to add'}</strong><span>{extraction.requires_confirmation?'The AI found information that is uncertain, conflicting, or clinically important to verify.':'The extracted facts are source-supported. You remain in control before they enter the health story.'}</span></div></div>
-        <div className="button-row"><button className="button ghost" onClick={()=>setExtraction(null)}>Change input</button><button className="button primary" onClick={saveItem}>Confirm and add</button></div>
+        <div className={`confirmation-state ${extraction.requires_confirmation?'attention':''}`}><ShieldCheck size={18}/><div><strong>{extraction.requires_confirmation?'Confirm before adding':'Ready to add'}</strong><span>{extraction.requires_confirmation?'The AI found information that is uncertain, conflicting, or clinically important to verify.':'The extracted facts are source-supported. Confirmation will insert them into the structured patient record.'}</span></div></div>
+        <div className="button-row"><button className="button ghost" onClick={()=>setExtraction(null)}>Change input</button><button className="button primary" onClick={saveItem}>Confirm, reconcile, and add</button></div>
       </div>}
     </section>}
 
-    <div className="trust-strip"><ShieldCheck size={18}/><span>The browser sends the selected image or text to a same-origin Vercel function, which calls Nebius. The API key never enters the browser or GitHub.</span></div>
+    <div className="trust-strip"><ShieldCheck size={18}/><span>The original source remains linked to every structured fact. Vital Passport does not silently overwrite conflicting information.</span></div>
   </div>
 }
