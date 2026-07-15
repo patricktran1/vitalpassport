@@ -4,7 +4,8 @@ import type { HealthExtraction, UploadItem } from '../types'
 
 export type CheckInFocus = 'general' | 'mental_health' | 'symptoms' | 'blood_pressure' | 'diabetes' | 'medication'
 export type CheckInCadence = 'daily' | 'weekdays' | 'weekly'
-export type CheckInChannel = 'in_app' | 'browser'
+export type CheckInChannel = 'in_app' | 'browser' | 'mock_email' | 'mock_sms'
+export type MockDeliveryChannel = Extract<CheckInChannel, 'mock_email' | 'mock_sms'>
 
 export interface CheckInSchedule {
   id: string
@@ -31,15 +32,36 @@ export interface CheckInResponse {
   createdAt: string
 }
 
+export interface MockDelivery {
+  id: string
+  occurrenceKey: string
+  scheduleId: string
+  scheduleTitle: string
+  channel: MockDeliveryChannel
+  destination: string
+  subject: string
+  body: string
+  createdAt: string
+  status: 'simulated_sent'
+}
+
+interface MockContact {
+  email: string
+  phone: string
+}
+
 type SchedulePatch = Partial<Omit<CheckInSchedule, 'id'>>
 
 interface CheckInContextValue {
   schedules: CheckInSchedule[]
   responses: CheckInResponse[]
+  deliveries: MockDelivery[]
   activeSchedule: CheckInSchedule | null
   nextSchedule: CheckInSchedule | null
   dueCount: number
   notificationPermission: NotificationPermission | 'unsupported'
+  mockEmail: string
+  mockPhone: string
   addSchedule: () => void
   updateSchedule: (scheduleId: string, patch: SchedulePatch) => void
   removeSchedule: (scheduleId: string) => void
@@ -47,11 +69,16 @@ interface CheckInContextValue {
   snoozeActive: (minutes?: number) => void
   completeCheckIn: (response: string) => void
   requestBrowserNotifications: () => Promise<NotificationPermission | 'unsupported'>
+  setMockContact: (patch: Partial<MockContact>) => void
+  sendMockReminder: (scheduleId: string, channel: MockDeliveryChannel) => void
   resetCheckIns: () => void
 }
 
 const STORAGE_KEY = 'vital-check-ins-v1'
 const RESPONSE_KEY = 'vital-check-in-responses-v1'
+const DELIVERY_KEY = 'vital-check-in-mock-deliveries-v1'
+const CONTACT_KEY = 'vital-check-in-mock-contact-v1'
+const defaultContact: MockContact = { email: 'maria.santos@example.com', phone: '(415) 555-0198' }
 
 function validDay(schedule: Pick<CheckInSchedule, 'cadence' | 'weekday'>, date: Date) {
   const day = date.getDay()
@@ -81,7 +108,7 @@ function seedSchedules(): CheckInSchedule[] {
     time: '19:00',
     weekday: 3,
     enabled: true,
-    channels: ['in_app'] as CheckInChannel[],
+    channels: ['in_app', 'mock_email'] as CheckInChannel[],
   }
   const weekly = {
     id: 'checkin-weekly-mood',
@@ -110,9 +137,37 @@ function readArray<T>(key: string, fallback: T[]) {
   }
 }
 
+function readContact() {
+  if (typeof window === 'undefined') return defaultContact
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(CONTACT_KEY) || 'null')
+    return parsed && typeof parsed === 'object' ? { ...defaultContact, ...parsed } as MockContact : defaultContact
+  } catch {
+    return defaultContact
+  }
+}
+
 function notificationState(): NotificationPermission | 'unsupported' {
   if (typeof window === 'undefined' || typeof Notification === 'undefined') return 'unsupported'
   return Notification.permission
+}
+
+function createMockDelivery(schedule: CheckInSchedule, channel: MockDeliveryChannel, destination: string, occurrenceKey: string): MockDelivery {
+  const isEmail = channel === 'mock_email'
+  return {
+    id: `delivery-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    occurrenceKey,
+    scheduleId: schedule.id,
+    scheduleTitle: schedule.title,
+    channel,
+    destination,
+    subject: isEmail ? `Vital Passport check-in: ${schedule.title}` : 'Vital Passport check-in',
+    body: isEmail
+      ? `${schedule.prompt}\n\nOpen Vital Passport to answer by voice or text. Your response will go to Health Inbox for review before it changes your confirmed record.`
+      : `Vital Passport: ${schedule.prompt} Open the app to answer. This is a simulated demo text.`,
+    createdAt: new Date().toISOString(),
+    status: 'simulated_sent',
+  }
 }
 
 const CheckInContext = createContext<CheckInContextValue | undefined>(undefined)
@@ -121,17 +176,16 @@ export function CheckInProvider({ children }: { children: ReactNode }) {
   const { queueExtractionFindings } = useHealthInbox()
   const [schedules, setSchedules] = useState<CheckInSchedule[]>(() => readArray(STORAGE_KEY, seedSchedules()))
   const [responses, setResponses] = useState<CheckInResponse[]>(() => readArray(RESPONSE_KEY, []))
+  const [deliveries, setDeliveries] = useState<MockDelivery[]>(() => readArray(DELIVERY_KEY, []))
+  const [mockContact, setMockContactState] = useState<MockContact>(readContact)
   const [activeScheduleId, setActiveScheduleId] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(notificationState)
 
-  useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(schedules))
-  }, [schedules])
-
-  useEffect(() => {
-    window.localStorage.setItem(RESPONSE_KEY, JSON.stringify(responses.slice(0, 50)))
-  }, [responses])
+  useEffect(() => { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(schedules)) }, [schedules])
+  useEffect(() => { window.localStorage.setItem(RESPONSE_KEY, JSON.stringify(responses.slice(0, 50))) }, [responses])
+  useEffect(() => { window.localStorage.setItem(DELIVERY_KEY, JSON.stringify(deliveries.slice(0, 100))) }, [deliveries])
+  useEffect(() => { window.localStorage.setItem(CONTACT_KEY, JSON.stringify(mockContact)) }, [mockContact])
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30_000)
@@ -173,6 +227,22 @@ export function CheckInProvider({ children }: { children: ReactNode }) {
     }
     setSchedules((current) => current.map((item) => item.id === schedule.id ? { ...item, lastNotifiedFor: schedule.nextDueAt } : item))
   }, [dueSchedules, notificationPermission])
+
+  useEffect(() => {
+    const additions: MockDelivery[] = []
+    dueSchedules.forEach((schedule) => {
+      schedule.channels.forEach((channel) => {
+        if (channel !== 'mock_email' && channel !== 'mock_sms') return
+        const occurrenceKey = `${schedule.id}:${schedule.nextDueAt}:${channel}`
+        const alreadyLogged = deliveries.some((delivery) => delivery.occurrenceKey === occurrenceKey)
+          || additions.some((delivery) => delivery.occurrenceKey === occurrenceKey)
+        if (alreadyLogged) return
+        const destination = channel === 'mock_email' ? mockContact.email : mockContact.phone
+        additions.push(createMockDelivery(schedule, channel, destination, occurrenceKey))
+      })
+    })
+    if (additions.length) setDeliveries((current) => [...additions, ...current].slice(0, 100))
+  }, [dueSchedules, deliveries, mockContact])
 
   const addSchedule = () => {
     const schedule = {
@@ -272,22 +342,39 @@ export function CheckInProvider({ children }: { children: ReactNode }) {
     return permission
   }
 
+  const setMockContact = (patch: Partial<MockContact>) => setMockContactState((current) => ({ ...current, ...patch }))
+
+  const sendMockReminder = (scheduleId: string, channel: MockDeliveryChannel) => {
+    const schedule = schedules.find((item) => item.id === scheduleId)
+    if (!schedule) return
+    const destination = channel === 'mock_email' ? mockContact.email : mockContact.phone
+    const occurrenceKey = `manual:${schedule.id}:${channel}:${Date.now()}`
+    setDeliveries((current) => [createMockDelivery(schedule, channel, destination, occurrenceKey), ...current].slice(0, 100))
+  }
+
   const resetCheckIns = () => {
     const seeded = seedSchedules()
     setSchedules(seeded)
     setResponses([])
+    setDeliveries([])
+    setMockContactState(defaultContact)
     setActiveScheduleId(null)
     window.localStorage.removeItem(STORAGE_KEY)
     window.localStorage.removeItem(RESPONSE_KEY)
+    window.localStorage.removeItem(DELIVERY_KEY)
+    window.localStorage.removeItem(CONTACT_KEY)
   }
 
   return <CheckInContext.Provider value={{
     schedules,
     responses,
+    deliveries,
     activeSchedule,
     nextSchedule,
     dueCount: dueSchedules.length,
     notificationPermission,
+    mockEmail: mockContact.email,
+    mockPhone: mockContact.phone,
     addSchedule,
     updateSchedule,
     removeSchedule,
@@ -295,6 +382,8 @@ export function CheckInProvider({ children }: { children: ReactNode }) {
     snoozeActive,
     completeCheckIn,
     requestBrowserNotifications,
+    setMockContact,
+    sendMockReminder,
     resetCheckIns,
   }}>{children}</CheckInContext.Provider>
 }

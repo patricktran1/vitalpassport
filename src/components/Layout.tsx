@@ -1,8 +1,9 @@
-import { ArrowUpFromLine, BellRing, Bot, CalendarDays, ChevronRight, ClipboardList, FileHeart, Home, Inbox as InboxIcon, Menu, PlusCircle, RotateCcw, ShieldCheck, Sparkles, X } from 'lucide-react'
+import { ArrowUpFromLine, BellRing, Bot, Brain, CalendarDays, ChevronRight, ClipboardList, FileHeart, Home, Inbox as InboxIcon, Menu, PlusCircle, RotateCcw, ShieldCheck, Sparkles, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { patient } from '../data/demo'
 import { useCheckIns } from '../context/CheckInContext'
+import { useCopilotMemory } from '../context/CopilotMemoryContext'
 import { useHealthInbox } from '../context/HealthInboxContext'
 import { useVital } from '../context/VitalContext'
 import { COPILOT_DRAWER_EVENT, type CopilotDrawerRequest } from '../lib/copilot-drawer'
@@ -30,6 +31,7 @@ export function Layout() {
   const { resetDemo } = useVital()
   const { pendingCount, resetInbox } = useHealthInbox()
   const { dueCount, resetCheckIns } = useCheckIns()
+  const { activeMemories, resetMemory } = useCopilotMemory()
 
   const openCopilot = (prompt = '') => {
     setPromptRequest({ id: Date.now(), prompt })
@@ -50,6 +52,7 @@ export function Layout() {
     resetDemo()
     resetInbox()
     resetCheckIns()
+    resetMemory()
     setMobileOpen(false)
     setCopilotOpen(false)
     navigate('/')
@@ -70,6 +73,9 @@ export function Layout() {
           <button className={`nav-item copilot-nav-trigger ${copilotOpen ? 'active' : ''}`} onClick={() => openCopilot()} aria-expanded={copilotOpen}>
             <Bot size={19}/><span>Health Copilot</span><Sparkles size={14}/>
           </button>
+          <NavLink to="/memory" onClick={() => setMobileOpen(false)} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <Brain size={19}/><span>Copilot memory</span>{activeMemories.length > 0 && <small className="nav-memory-badge">{activeMemories.length}</small>}
+          </NavLink>
           <NavLink to="/inbox" onClick={() => setMobileOpen(false)} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <InboxIcon size={19}/><span>Health Inbox</span>{pendingCount > 0 && <small className="nav-inbox-badge">{pendingCount}</small>}
           </NavLink>

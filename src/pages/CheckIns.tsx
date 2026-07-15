@@ -1,5 +1,5 @@
-import { BellRing, CalendarClock, CheckCircle2, Clock3, Mail, MessageSquareText, MonitorDot, Plus, ShieldCheck, Smartphone, Trash2 } from 'lucide-react'
-import { useCheckIns, type CheckInFocus, type CheckInSchedule } from '../context/CheckInContext'
+import { BellRing, CalendarClock, CheckCircle2, Clock3, Mail, MessageSquareText, MonitorDot, Plus, Send, ShieldCheck, Smartphone, Trash2 } from 'lucide-react'
+import { useCheckIns, type CheckInFocus, type CheckInSchedule, type MockDeliveryChannel } from '../context/CheckInContext'
 
 const focusLabels: Record<CheckInFocus, string> = {
   general: 'General wellbeing',
@@ -28,14 +28,19 @@ export function CheckIns() {
   const {
     schedules,
     responses,
+    deliveries,
     nextSchedule,
     dueCount,
     notificationPermission,
+    mockEmail,
+    mockPhone,
     addSchedule,
     updateSchedule,
     removeSchedule,
     startCheckIn,
     requestBrowserNotifications,
+    setMockContact,
+    sendMockReminder,
   } = useCheckIns()
 
   const toggleBrowser = async (schedule: CheckInSchedule) => {
@@ -46,6 +51,16 @@ export function CheckIns() {
     const permission = await requestBrowserNotifications()
     if (permission === 'granted') updateSchedule(schedule.id, { channels: [...schedule.channels, 'browser'] })
   }
+
+  const toggleMock = (schedule: CheckInSchedule, channel: MockDeliveryChannel) => {
+    updateSchedule(schedule.id, {
+      channels: schedule.channels.includes(channel)
+        ? schedule.channels.filter((item) => item !== channel)
+        : [...schedule.channels, channel],
+    })
+  }
+
+  const testSchedule = nextSchedule || schedules[0]
 
   return (
     <div className="page checkins-page">
@@ -93,7 +108,9 @@ export function CheckIns() {
 
               <div className="checkin-delivery-row">
                 <div className="delivery-chip active"><MonitorDot size={15}/><span>In-app</span><CheckCircle2 size={14}/></div>
-                <button className={`delivery-chip ${schedule.channels.includes('browser') ? 'active' : ''}`} onClick={() => void toggleBrowser(schedule)}><Smartphone size={15}/><span>Browser alert</span>{schedule.channels.includes('browser') && <CheckCircle2 size={14}/>}</button>
+                <button className={`delivery-chip ${schedule.channels.includes('browser') ? 'active' : ''}`} onClick={() => void toggleBrowser(schedule)}><Smartphone size={15}/><span>Browser</span>{schedule.channels.includes('browser') && <CheckCircle2 size={14}/>}</button>
+                <button className={`delivery-chip mock ${schedule.channels.includes('mock_email') ? 'active' : ''}`} onClick={() => toggleMock(schedule, 'mock_email')}><Mail size={15}/><span>Mock email</span>{schedule.channels.includes('mock_email') && <CheckCircle2 size={14}/>}</button>
+                <button className={`delivery-chip mock ${schedule.channels.includes('mock_sms') ? 'active' : ''}`} onClick={() => toggleMock(schedule, 'mock_sms')}><MessageSquareText size={15}/><span>Mock text</span>{schedule.channels.includes('mock_sms') && <CheckCircle2 size={14}/>}</button>
                 <span className="checkin-next-due"><Clock3 size={14}/>{formatDue(schedule.nextDueAt)}</span>
               </div>
 
@@ -106,14 +123,28 @@ export function CheckIns() {
         </section>
 
         <aside className="checkin-delivery-panel">
-          <div className="section-mini-heading"><MessageSquareText size={18}/><strong>Delivery channels</strong><span>Start local. Add cloud delivery deliberately.</span></div>
-          <div className="delivery-option ready"><MonitorDot size={20}/><div><strong>In-app prompts</strong><span>Active now. Opens a calm check-in inside Vital Passport.</span></div><em>Ready</em></div>
-          <div className={`delivery-option ${notificationPermission === 'granted' ? 'ready' : ''}`}><Smartphone size={20}/><div><strong>Browser notifications</strong><span>{notificationPermission === 'granted' ? 'Permission granted on this device.' : notificationPermission === 'denied' ? 'Blocked in browser settings.' : 'Optional alerts while the browser can deliver them.'}</span></div><em>{notificationPermission === 'granted' ? 'Ready' : 'Optional'}</em></div>
-          <div className="delivery-option locked"><Mail size={20}/><div><strong>Email reminders</strong><span>Requires secure account storage plus a transactional email service.</span></div><em>Cloud activation</em></div>
-          <div className="delivery-option locked"><MessageSquareText size={20}/><div><strong>Text reminders</strong><span>Requires verified consent, phone storage, opt-out handling, and an SMS service.</span></div><em>Cloud activation</em></div>
-          <div className="checkin-cloud-note"><ShieldCheck size={17}/><span>Email and text preferences are intentionally not faked with browser-only storage. Supabase and a delivery service are the next infrastructure gate.</span></div>
+          <div className="section-mini-heading"><MessageSquareText size={18}/><strong>Mock delivery lab</strong><span>Demonstrate reminders without paid services.</span></div>
+          <div className="delivery-option ready"><MonitorDot size={20}/><div><strong>In-app prompts</strong><span>Active now. Opens a calm check-in inside Vital Passport.</span></div><em>Live</em></div>
+          <div className={`delivery-option ${notificationPermission === 'granted' ? 'ready' : ''}`}><Smartphone size={20}/><div><strong>Browser notifications</strong><span>{notificationPermission === 'granted' ? 'Permission granted on this device.' : notificationPermission === 'denied' ? 'Blocked in browser settings.' : 'Optional alerts while the browser can deliver them.'}</span></div><em>{notificationPermission === 'granted' ? 'Live' : 'Optional'}</em></div>
+
+          <div className="mock-contact-form">
+            <label><span>Demo email destination</span><input value={mockEmail} onChange={(event) => setMockContact({ email: event.target.value })}/></label>
+            <label><span>Demo text destination</span><input value={mockPhone} onChange={(event) => setMockContact({ phone: event.target.value })}/></label>
+          </div>
+
+          <div className="mock-send-grid">
+            <button disabled={!testSchedule} onClick={() => testSchedule && sendMockReminder(testSchedule.id, 'mock_email')}><Mail size={17}/><span><strong>Send mock email</strong><small>Creates a local delivery receipt</small></span><Send size={14}/></button>
+            <button disabled={!testSchedule} onClick={() => testSchedule && sendMockReminder(testSchedule.id, 'mock_sms')}><MessageSquareText size={17}/><span><strong>Send mock text</strong><small>Creates a local delivery receipt</small></span><Send size={14}/></button>
+          </div>
+
+          <div className="checkin-cloud-note"><ShieldCheck size={17}/><span>These are clearly labeled simulations stored only in this browser. No external email or text is sent.</span></div>
         </aside>
       </div>
+
+      <section className="card mock-outbox-card">
+        <div className="card-heading"><div><div className="eyebrow">Demo delivery receipts</div><h2>Mock reminder outbox</h2></div><span className="soft-icon"><Send size={19}/></span></div>
+        {deliveries.length ? <div className="mock-outbox-list">{deliveries.slice(0,10).map((delivery) => <article key={delivery.id}><span className={`mock-channel ${delivery.channel}`}><>{delivery.channel === 'mock_email' ? <Mail size={15}/> : <MessageSquareText size={15}/>}</></span><div><strong>{delivery.subject}</strong><p>{delivery.body}</p><small>{delivery.destination} · {formatDue(delivery.createdAt)}</small></div><em>Simulated sent</em></article>)}</div> : <div className="checkin-history-empty"><Send size={19}/><span>Test reminders and scheduled mock deliveries will appear here.</span></div>}
+      </section>
 
       <section className="card checkin-history-card">
         <div className="card-heading"><div><div className="eyebrow">Recent responses</div><h2>Check-in history</h2></div><span className="soft-icon"><BellRing size={20}/></span></div>
