@@ -229,7 +229,7 @@ export function VitalProvider({ children }: { children: ReactNode }) {
     }))
 
     const eventId = `timeline-resolution-${issue.id}`
-    setTimelineEvents((current) => current.some((event) => event.id === eventId) ? current : [...current, {
+    const resolutionEvent: TimelineEvent = {
       id: eventId,
       date: new Date().toISOString().slice(0, 10),
       displayDate: toDisplayDate(new Date().toISOString().slice(0, 10)),
@@ -239,7 +239,8 @@ export function VitalProvider({ children }: { children: ReactNode }) {
       sourceLabel: 'Patient confirmed',
       sourceType: 'patient',
       sourceId: selected.sourceId,
-    }].sort((a, b) => a.date.localeCompare(b.date)))
+    }
+    setTimelineEvents((current) => current.some((event) => event.id === eventId) ? current : [...current, resolutionEvent].sort((a, b) => a.date.localeCompare(b.date)))
   }
 
   const setAnswer = (key: keyof InterviewAnswers, value: string) => {
