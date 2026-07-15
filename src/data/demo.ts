@@ -80,6 +80,18 @@ export const sources: SourceRecord[] = [
     ],
   },
   {
+    id: 'src-symptom-update',
+    title: 'Dizziness symptom update',
+    subtitle: 'Patient entry · July 14, 2026',
+    date: '2026-07-14',
+    type: 'symptom',
+    excerpt: 'My dizziness is better now, but I do not remember the exact day it started improving.',
+    details: [
+      { label: 'Change', value: 'Dizziness has improved', highlight: true },
+      { label: 'Missing context', value: 'Exact improvement date is not known', highlight: true },
+    ],
+  },
+  {
     id: 'src-bp',
     title: 'Home blood pressure log',
     subtitle: 'Patient-entered readings · July 8–13, 2026',
