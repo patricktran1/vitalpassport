@@ -11,6 +11,8 @@ export interface SourceRecord {
   type: HealthItemType
   excerpt: string
   details: Array<{ label: string; value: string; highlight?: boolean }>
+  pageCount?: number
+  analyzedPages?: number[]
 }
 
 export interface TimelineEvent {
@@ -54,6 +56,7 @@ export interface ExtractionEvidence {
   value: string
   quote: string
   confidence: number
+  page?: number
 }
 
 export interface HealthExtraction {
@@ -74,6 +77,8 @@ export interface HealthExtraction {
   confidence: number
   model?: string
   mode?: 'live' | 'demo'
+  source_pages?: number[]
+  page_count?: number
 }
 
 export interface UploadItem {
