@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ProgressRing } from '../components/ProgressRing'
 import { useVital } from '../context/VitalContext'
 import { patient } from '../data/demo'
+import { openCopilotDrawer } from '../lib/copilot-drawer'
 
 const uploadIcons = { medication: Pill, document: FileText, lab: TestTube2, voice: FileText, symptom: HeartPulse, question: FileText, photo: FileText }
 
@@ -40,12 +41,12 @@ export function Dashboard() {
           <h2>Ask the record, not another portal.</h2>
           <p>Vital Passport can read across {sources.length} source records, {timelineEvents.length} timeline events, medications, labs, and patient-confirmed context while showing exactly where every answer came from.</p>
           <div className="copilot-launch-prompts">
-            <Link to="/copilot?prompt=What%20changed%20in%20my%20health%20record%20recently%3F">What changed recently?</Link>
-            <Link to="/copilot?prompt=What%20should%20I%20clarify%20before%20my%20next%20visit%3F">What should I clarify?</Link>
-            <Link to="/copilot?prompt=Summarize%20my%20medications%20and%20any%20conflicts.">Check my medications</Link>
+            <button onClick={() => openCopilotDrawer('What changed in my health record recently?')}>What changed recently?</button>
+            <button onClick={() => openCopilotDrawer('What should I clarify before my next visit?')}>What should I clarify?</button>
+            <button onClick={() => openCopilotDrawer('Summarize my medications and any conflicts.')}>Check my medications</button>
           </div>
         </div>
-        <Link to="/copilot" className="button primary copilot-launch-button">Open Health Copilot <ArrowRight size={17}/></Link>
+        <button onClick={() => openCopilotDrawer()} className="button primary copilot-launch-button">Open Health Copilot <ArrowRight size={17}/></button>
       </section>
 
       <section className="hero-card">
