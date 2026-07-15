@@ -1,4 +1,4 @@
-import type { Medication, SourceRecord, TimelineEvent } from '../types'
+import type { CareTask, ClinicalLabResult, ClinicalMedication, Medication, ReconciliationIssue, SourceRecord, TimelineEvent } from '../types'
 
 export const patient = {
   name: 'Maria Santos',
@@ -38,6 +38,18 @@ export const sources: SourceRecord[] = [
       { label: 'Dose', value: '50 mg', highlight: true },
       { label: 'Directions', value: 'Take one tablet every morning', highlight: true },
       { label: 'Prescriber', value: 'J. Kim, MD' },
+    ],
+  },
+  {
+    id: 'src-med-list',
+    title: 'Patient-confirmed medication list',
+    subtitle: 'Patient review · July 10, 2026',
+    date: '2026-07-10',
+    type: 'medication',
+    excerpt: 'Metformin 500 mg twice daily. Lisinopril 10 mg once daily.',
+    details: [
+      { label: 'Medication', value: 'Metformin 500 mg twice daily' },
+      { label: 'Medication', value: 'Lisinopril 10 mg once daily' },
     ],
   },
   {
@@ -84,9 +96,44 @@ export const sources: SourceRecord[] = [
 ]
 
 export const medications: Medication[] = [
-  { name: 'Metformin', dose: '500 mg', frequency: 'Twice daily', status: 'verified', source: 'Medication bottle', sourceId: 'src-bottle' },
-  { name: 'Lisinopril', dose: '10 mg', frequency: 'Once daily', status: 'verified', source: 'Medication bottle', sourceId: 'src-bottle' },
+  { name: 'Metformin', dose: '500 mg', frequency: 'Twice daily', status: 'verified', source: 'Patient medication list', sourceId: 'src-med-list' },
+  { name: 'Lisinopril', dose: '10 mg', frequency: 'Once daily', status: 'verified', source: 'Patient medication list', sourceId: 'src-med-list' },
   { name: 'Metoprolol', dose: '25 mg twice daily or 50 mg once daily', frequency: 'Conflicting sources', status: 'conflict', source: 'AVS + bottle photo', sourceId: 'src-avs' },
+]
+
+export const seedClinicalMedications: ClinicalMedication[] = [
+  { id:'med-metformin', canonicalName:'metformin', name:'Metformin', strength:'500 mg', directions:'Twice daily', prescriber:'', sourceId:'src-med-list', sourceTitle:'Patient-confirmed medication list', sourceDate:'2026-07-10', evidence:'Metformin 500 mg twice daily', confidence:1, verificationStatus:'patient_confirmed', active:true },
+  { id:'med-lisinopril', canonicalName:'lisinopril', name:'Lisinopril', strength:'10 mg', directions:'Once daily', prescriber:'', sourceId:'src-med-list', sourceTitle:'Patient-confirmed medication list', sourceDate:'2026-07-10', evidence:'Lisinopril 10 mg once daily', confidence:1, verificationStatus:'patient_confirmed', active:true },
+  { id:'med-metoprolol-avs', canonicalName:'metoprolol', name:'Metoprolol', strength:'25 mg', directions:'Take twice daily', prescriber:'', sourceId:'src-avs', sourceTitle:'Urgent care after-visit summary', sourceDate:'2026-07-02', evidence:'metoprolol 25 mg twice daily', confidence:.96, verificationStatus:'needs_review', active:true },
+  { id:'med-metoprolol-bottle', canonicalName:'metoprolol', name:'Metoprolol succinate ER', strength:'50 mg', directions:'Take one tablet every morning', prescriber:'J. Kim, MD', sourceId:'src-bottle', sourceTitle:'Metoprolol bottle photo', sourceDate:'2026-07-10', evidence:'METOPROLOL SUCCINATE ER 50 MG TABLET. Take one tablet by mouth every morning.', confidence:.98, verificationStatus:'needs_review', active:true },
+]
+
+export const seedLabResults: ClinicalLabResult[] = [
+  { id:'lab-hgb-20260702', canonicalTest:'hemoglobin', test:'Hemoglobin', value:'10.8', unit:'g/dL', referenceRange:'12.0–15.5', abnormalFlag:'Low', eventDate:'2026-07-02', sourceId:'src-labs', sourceTitle:'Laboratory report', evidence:'Hemoglobin 10.8 g/dL (low)', confidence:.98 },
+  { id:'lab-glucose-20260702', canonicalTest:'glucose', test:'Glucose', value:'168', unit:'mg/dL', referenceRange:'70–99', abnormalFlag:'High', eventDate:'2026-07-02', sourceId:'src-labs', sourceTitle:'Laboratory report', evidence:'Glucose 168 mg/dL (high)', confidence:.98 },
+  { id:'lab-creatinine-20260702', canonicalTest:'creatinine', test:'Creatinine', value:'0.9', unit:'mg/dL', referenceRange:'0.6–1.2', abnormalFlag:'Normal', eventDate:'2026-07-02', sourceId:'src-labs', sourceTitle:'Laboratory report', evidence:'Creatinine 0.9 mg/dL', confidence:.97 },
+]
+
+export const seedReconciliationIssues: ReconciliationIssue[] = [
+  {
+    id:'issue-metoprolol',
+    kind:'medication_conflict',
+    entityName:'Metoprolol',
+    title:'Metoprolol instructions conflict',
+    detail:'Two current sources list different strengths and schedules.',
+    question:'Which metoprolol instructions are you following now?',
+    status:'open',
+    sources:[
+      { recordId:'med-metoprolol-avs', sourceId:'src-avs', label:'Urgent care summary', value:'25 mg · twice daily' },
+      { recordId:'med-metoprolol-bottle', sourceId:'src-bottle', label:'Bottle photograph', value:'50 mg · every morning' },
+    ],
+    createdAt:'2026-07-10',
+  },
+]
+
+export const seedCareTasks: CareTask[] = [
+  { id:'task-follow-up', type:'follow_up', title:'Complete primary-care follow-up', detail:'Urgent care recommended primary-care follow-up within 1–2 weeks.', status:'open', sourceId:'src-avs', dueLabel:'At the July 18 visit' },
+  { id:'task-hgb', type:'lab_review', title:'Review low hemoglobin', detail:'Hemoglobin was documented as 10.8 g/dL on July 2.', status:'open', sourceId:'src-labs', dueLabel:'Discuss at next visit' },
 ]
 
 export const timeline: TimelineEvent[] = [
