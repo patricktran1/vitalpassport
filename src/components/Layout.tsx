@@ -1,4 +1,4 @@
-import { CalendarDays, ClipboardList, FileHeart, Home, Menu, PlusCircle, RotateCcw, ShieldCheck, X } from 'lucide-react'
+import { ArrowUpFromLine, CalendarDays, ClipboardList, FileHeart, Home, Menu, PlusCircle, RotateCcw, ShieldCheck, X } from 'lucide-react'
 import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { patient } from '../data/demo'
@@ -13,6 +13,7 @@ const navItems = [
   { to: '/timeline', label: 'Timeline', icon: CalendarDays },
   { to: '/prepare', label: 'Prepare for visit', icon: ClipboardList },
   { to: '/brief', label: 'Clinician brief', icon: FileHeart },
+  { to: '/transfer', label: 'Transfer center', icon: ArrowUpFromLine },
 ]
 
 export function Layout() {

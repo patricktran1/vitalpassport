@@ -6,6 +6,7 @@ import { Dashboard } from './pages/Dashboard'
 import { Prepare } from './pages/Prepare'
 import { SharedBrief } from './pages/SharedBrief'
 import { Timeline } from './pages/Timeline'
+import { Transfer } from './pages/Transfer'
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
         <Route path="timeline" element={<Timeline />} />
         <Route path="prepare" element={<Prepare />} />
         <Route path="brief" element={<Brief />} />
+        <Route path="transfer" element={<Transfer />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
