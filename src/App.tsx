@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { AddHealth } from './pages/AddHealth'
 import { Brief } from './pages/Brief'
+import { Copilot } from './pages/Copilot'
 import { Dashboard } from './pages/Dashboard'
 import { OpenEmr } from './pages/OpenEmr'
 import { OpenEmrCallback } from './pages/OpenEmrCallback'
@@ -17,6 +18,7 @@ export default function App() {
       <Route path="openemr/callback" element={<OpenEmrCallback />} />
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
+        <Route path="copilot" element={<Copilot />} />
         <Route path="add" element={<AddHealth />} />
         <Route path="timeline" element={<Timeline />} />
         <Route path="prepare" element={<Prepare />} />
