@@ -71,6 +71,11 @@ function hasDocumentScope(scopes) {
   return hasApi && hasPatient && hasDocument
 }
 
+function hasResponseErrors(value) {
+  if (Array.isArray(value)) return value.length > 0
+  return Boolean(value && typeof value === 'object' && Object.keys(value).length > 0)
+}
+
 function extractError(body, fallback) {
   const validation = body?.validationErrors
   const internal = body?.internalErrors
@@ -104,8 +109,8 @@ async function resolveNumericPid(config, accessToken, patientUuid) {
   const url = `${config.apiBase}/patient/${encodeURIComponent(patientUuid)}`
   const { body } = await fetchOpenEmr(url, { headers: authHeaders(accessToken) })
   const data = Array.isArray(body?.data) ? body.data[0] : body?.data
-  const pid = data?.pid || data?.id
-  if (!pid) throw new Error('OpenEMR returned the patient chart but did not include its internal patient ID.')
+  const pid = data?.pid
+  if (!pid) throw new Error('OpenEMR returned the patient chart but did not include its internal numeric patient ID.')
   return String(pid)
 }
 
@@ -116,6 +121,36 @@ function candidatePaths(primary) {
     '/Medical Record',
     '/Documents',
   ].filter(Boolean))]
+}
+
+function documentRows(body) {
+  if (Array.isArray(body?.data)) return body.data
+  if (Array.isArray(body)) return body
+  return []
+}
+
+async function verifyPatientDocument(config, accessToken, pid, path, filename) {
+  const query = new URLSearchParams({ path })
+  const url = `${config.apiBase}/patient/${encodeURIComponent(pid)}/document?${query.toString()}`
+
+  for (const delayMs of [0, 250, 750]) {
+    if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs))
+    const { body } = await fetchOpenEmr(url, { headers: authHeaders(accessToken) })
+    if (hasResponseErrors(body?.validationErrors) || hasResponseErrors(body?.internalErrors)) {
+      throw new Error(extractError(body, `OpenEMR could not verify the document in ${path}.`))
+    }
+    const match = documentRows(body).find((item) => String(item?.filename || item?.name || '') === filename)
+    if (match) {
+      return {
+        id: String(match.id || match.document_id || match.uuid || ''),
+        filename: String(match.filename || match.name || filename),
+        mimetype: String(match.mimetype || ''),
+        docdate: String(match.docdate || match.date || ''),
+      }
+    }
+  }
+
+  return null
 }
 
 async function uploadPatientDocument(config, accessToken, pid, filename, content) {
@@ -130,13 +165,21 @@ async function uploadPatientDocument(config, accessToken, pid, filename, content
         headers: authHeaders(accessToken),
         body: form,
       })
-      const failed = body?.data === false || (Array.isArray(body?.internalErrors) && body.internalErrors.length) || (Array.isArray(body?.validationErrors) && body.validationErrors.length)
+      const failed = body?.data === false || hasResponseErrors(body?.internalErrors) || hasResponseErrors(body?.validationErrors)
       if (failed) throw new Error(extractError(body, `OpenEMR declined the document path ${path}.`))
-      const returned = Array.isArray(body?.data) ? body.data[0] : body?.data
+
+      const verified = await verifyPatientDocument(config, accessToken, pid, path, filename)
+      if (!verified) {
+        attempts.push(`${path}: OpenEMR acknowledged the upload but did not list the file afterward`)
+        continue
+      }
+
       return {
         path,
-        id: String(returned?.id || returned?.document_id || returned?.uuid || filename),
-        body,
+        id: verified.id,
+        filename: verified.filename,
+        mimetype: verified.mimetype,
+        docdate: verified.docdate,
       }
     } catch (error) {
       const status = Number(error?.status) || 0
@@ -144,7 +187,12 @@ async function uploadPatientDocument(config, accessToken, pid, filename, content
       attempts.push(`${path}: ${error instanceof Error ? error.message : 'upload failed'}`)
     }
   }
-  throw new Error(`OpenEMR could not store the intake in a document category. Tried ${attempts.join(' | ')}`)
+  throw new Error(`OpenEMR did not verify the intake in Maria's document list. Tried ${attempts.join(' | ')}`)
+}
+
+function uniqueDocumentFilename(patientName) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '-').replace('Z', 'Z')
+  return `Vital-Passport-${slug(patientName)}-${timestamp}.txt`
 }
 
 export default async function handler(req, res) {
@@ -174,12 +222,11 @@ export default async function handler(req, res) {
     // authorization authority and will return 401/403 if the actual grant is insufficient.
     const pid = await resolveNumericPid(config, accessToken, patientId)
     const content = packetText(packet)
-    const date = new Date().toISOString().slice(0, 10)
-    const filename = `Vital-Passport-${slug(packet.patient.name)}-${date}.txt`
+    const filename = uniqueDocumentFilename(packet.patient.name)
     const uploaded = await uploadPatientDocument(config, accessToken, pid, filename, content)
 
     const warnings = []
-    if (scopeClaimMismatch) warnings.push(`OpenEMR's token response did not list all expected Standard API scopes (${REQUIRED_STANDARD_SCOPES.join(', ')}), but the native patient-document API authorized the upload.`)
+    if (scopeClaimMismatch) warnings.push(`OpenEMR's token response did not list all expected Standard API scopes (${REQUIRED_STANDARD_SCOPES.join(', ')}), but the native patient-document API authorized and verified the upload.`)
     if (options.includeLabs && (packet.labs || []).length) warnings.push(`${packet.labs.length} laboratory result${packet.labs.length === 1 ? '' : 's'} were included in the intake document because this OpenEMR capability statement does not advertise Observation creation.`)
     if (options.includeConditions && (packet.patient.conditions || []).length) warnings.push('Conditions remained in the reviewed intake document; no duplicate problem-list entries were created.')
     if (options.includeAllergies && (packet.patient.allergies || []).length) warnings.push('Allergy statements remained in the reviewed intake document; no duplicate allergy entries were created.')
@@ -194,12 +241,19 @@ export default async function handler(req, res) {
       resources: [{
         resourceType: 'PatientDocument',
         id: uploaded.id,
-        location: `${config.apiBase}/patient/${encodeURIComponent(pid)}/document`,
-        status: 'created',
+        location: `${config.apiBase}/patient/${encodeURIComponent(pid)}/document/${encodeURIComponent(uploaded.id)}`,
+        status: 'verified',
       }],
       failures: [],
       warnings,
-      document: { filename, categoryPath: uploaded.path, pid },
+      document: {
+        filename: uploaded.filename,
+        categoryPath: uploaded.path,
+        pid,
+        mimetype: uploaded.mimetype,
+        docdate: uploaded.docdate,
+        verified: true,
+      },
     })
   } catch (error) {
     const status = Number(error?.status) || 500
@@ -208,7 +262,7 @@ export default async function handler(req, res) {
       : ''
     return sendJson(res, status >= 400 && status < 600 ? status : 500, {
       error: `${error instanceof Error ? error.message : 'OpenEMR document upload failed.'}${scopeHint}`,
-      code: status === 401 || status === 403 ? 'OPENEMR_DOCUMENT_SCOPE_REQUIRED' : 'OPENEMR_DOCUMENT_UPLOAD_FAILED',
+      code: status === 401 || status === 403 ? 'OPENEMR_DOCUMENT_SCOPE_REQUIRED' : 'OPENEMR_DOCUMENT_UPLOAD_NOT_VERIFIED',
     })
   }
 }
