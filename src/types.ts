@@ -1,5 +1,6 @@
 export type SourceType = 'documented' | 'patient' | 'ai' | 'conflict'
 export type HealthItemType = 'document' | 'medication' | 'lab' | 'voice' | 'symptom' | 'question' | 'photo'
+export type VerificationStatus = 'documented' | 'patient_confirmed' | 'needs_review' | 'superseded'
 
 export interface SourceRecord {
   id: string
@@ -82,6 +83,88 @@ export interface UploadItem {
   status: 'processing' | 'ready'
   summary: string
   extraction?: HealthExtraction
+}
+
+export interface ClinicalMedication {
+  id: string
+  canonicalName: string
+  name: string
+  strength: string
+  directions: string
+  prescriber: string
+  sourceId: string
+  sourceTitle: string
+  sourceDate: string
+  evidence: string
+  confidence: number
+  verificationStatus: VerificationStatus
+  active: boolean
+}
+
+export interface ClinicalLabResult {
+  id: string
+  canonicalTest: string
+  test: string
+  value: string
+  unit: string
+  referenceRange: string
+  abnormalFlag: string
+  eventDate: string
+  sourceId: string
+  sourceTitle: string
+  evidence: string
+  confidence: number
+  trend?: string
+}
+
+export interface ReconciliationSource {
+  recordId: string
+  sourceId: string
+  label: string
+  value: string
+}
+
+export interface ReconciliationIssue {
+  id: string
+  kind: 'medication_conflict'
+  entityName: string
+  title: string
+  detail: string
+  question: string
+  status: 'open' | 'resolved'
+  sources: ReconciliationSource[]
+  resolution?: string
+  selectedRecordId?: string
+  createdAt: string
+}
+
+export interface CareTask {
+  id: string
+  type: 'follow_up' | 'lab_review' | 'medication_review' | 'patient_question'
+  title: string
+  detail: string
+  status: 'open' | 'done'
+  sourceId?: string
+  dueLabel?: string
+}
+
+export interface MedicationSummary {
+  canonicalName: string
+  name: string
+  strength: string
+  directions: string
+  status: 'confirmed' | 'conflict' | 'needs_review'
+  sourceCount: number
+  sourceIds: string[]
+  issueId?: string
+}
+
+export interface IngestionSummary {
+  medicationsAdded: number
+  labsAdded: number
+  timelineEventsAdded: number
+  conflictsFound: number
+  tasksCreated: number
 }
 
 export interface InterviewAnswers {
