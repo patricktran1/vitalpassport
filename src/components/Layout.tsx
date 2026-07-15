@@ -1,11 +1,13 @@
-import { ArrowUpFromLine, Bot, CalendarDays, ChevronRight, ClipboardList, FileHeart, Home, Inbox as InboxIcon, Menu, PlusCircle, RotateCcw, ShieldCheck, Sparkles, X } from 'lucide-react'
+import { ArrowUpFromLine, BellRing, Bot, CalendarDays, ChevronRight, ClipboardList, FileHeart, Home, Inbox as InboxIcon, Menu, PlusCircle, RotateCcw, ShieldCheck, Sparkles, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { patient } from '../data/demo'
+import { useCheckIns } from '../context/CheckInContext'
 import { useHealthInbox } from '../context/HealthInboxContext'
 import { useVital } from '../context/VitalContext'
 import { COPILOT_DRAWER_EVENT, type CopilotDrawerRequest } from '../lib/copilot-drawer'
 import { AccountPanel } from './AccountPanel'
+import { CheckInPrompt } from './CheckInPrompt'
 import { CopilotDrawer } from './CopilotDrawer'
 import { Logo } from './Logo'
 import { SourceDrawer } from './SourceDrawer'
@@ -27,6 +29,7 @@ export function Layout() {
   const location = useLocation()
   const { resetDemo } = useVital()
   const { pendingCount, resetInbox } = useHealthInbox()
+  const { dueCount, resetCheckIns } = useCheckIns()
 
   const openCopilot = (prompt = '') => {
     setPromptRequest({ id: Date.now(), prompt })
@@ -46,6 +49,7 @@ export function Layout() {
   const handleReset = () => {
     resetDemo()
     resetInbox()
+    resetCheckIns()
     setMobileOpen(false)
     setCopilotOpen(false)
     navigate('/')
@@ -68,6 +72,9 @@ export function Layout() {
           </button>
           <NavLink to="/inbox" onClick={() => setMobileOpen(false)} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <InboxIcon size={19}/><span>Health Inbox</span>{pendingCount > 0 && <small className="nav-inbox-badge">{pendingCount}</small>}
+          </NavLink>
+          <NavLink to="/check-ins" onClick={() => setMobileOpen(false)} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <BellRing size={19}/><span>Check-ins</span>{dueCount > 0 && <small className="nav-checkin-badge">{dueCount}</small>}
           </NavLink>
           {navItems.slice(1).map(({ to, label, icon: Icon }) => (
             <NavLink key={to} to={to} onClick={() => setMobileOpen(false)} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
@@ -121,6 +128,7 @@ export function Layout() {
         </button>
       )}
       <CopilotDrawer open={copilotOpen} promptRequest={promptRequest} onClose={() => setCopilotOpen(false)} />
+      <CheckInPrompt />
       <SourceDrawer />
     </div>
   )
