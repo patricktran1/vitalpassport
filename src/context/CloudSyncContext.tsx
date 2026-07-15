@@ -110,8 +110,10 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       setError('')
       return
     }
+    const client = supabase
+    const userId = auth.user.id
     const loadedUser = window.sessionStorage.getItem(CLOUD_LOADED_USER_KEY)
-    if (loadedUser === auth.user.id) {
+    if (loadedUser === userId) {
       setStatus('synced')
       return
     }
@@ -120,10 +122,10 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     const initializeCloudRecord = async () => {
       setStatus('loading')
       setError('')
-      const { data, error: loadError } = await supabase
+      const { data, error: loadError } = await client
         .from('patient_records')
         .select('record, updated_at')
-        .eq('user_id', auth.user!.id)
+        .eq('user_id', userId)
         .maybeSingle()
       if (cancelled) return
       if (loadError) {
@@ -134,7 +136,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
       if (data?.record && isPatientRecordSnapshot(data.record)) {
         writeSnapshotToSession(data.record)
         saveLocalSnapshot(data.record)
-        window.sessionStorage.setItem(CLOUD_LOADED_USER_KEY, auth.user!.id)
+        window.sessionStorage.setItem(CLOUD_LOADED_USER_KEY, userId)
         setLastSyncedAt(typeof data.updated_at === 'string' ? data.updated_at : data.record.updatedAt)
         window.location.reload()
         return
