@@ -17,4 +17,16 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npm run check
-      - run: npm run build
+      - name: Build production bundle
+        id: production_build
+        continue-on-error: true
+        run: npm run build > build.log 2>&1
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+      - name: Fail when build failed
+        if: steps.production_build.outcome == 'failure'
+        run: cat build.log && exit 1
