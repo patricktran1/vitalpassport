@@ -1,5 +1,6 @@
-import { Braces, CheckCircle2, Download, FileArchive, FileHeart, FileJson, Info, ShieldCheck, TriangleAlert } from 'lucide-react'
+import { Braces, CheckCircle2, Database, Download, FileArchive, FileHeart, FileJson, Info, ShieldCheck, TriangleAlert } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useVital } from '../context/VitalContext'
 import { patient } from '../data/demo'
 import { buildSharedBriefPacket } from '../lib/briefPacket'
@@ -88,7 +89,7 @@ export function Transfer() {
       <div>
         <div className="eyebrow">Portable clinical handoff</div>
         <h1>Transfer center</h1>
-        <p>Move the patient story without flattening it. Export a readable clinic packet, a structured FHIR R4 Bundle, or a complete patient-owned backup.</p>
+        <p>Move the patient story without flattening it. Send a reviewed intake to OpenEMR or export a readable packet, structured FHIR Bundle, or complete patient-owned backup.</p>
       </div>
       <div className={`transfer-readiness ${ready ? 'ready' : 'attention'}`}>
         {ready ? <CheckCircle2 size={20}/> : <TriangleAlert size={20}/>} 
@@ -99,7 +100,7 @@ export function Transfer() {
     <section className="transfer-hero">
       <div>
         <span className="transfer-hero-icon"><FileHeart size={25}/></span>
-        <div><div className="eyebrow">One record, three formats</div><h2>Choose the artifact that matches the destination.</h2><p>Every export is generated in the browser from the current reconciled record. No new server or account is required.</p></div>
+        <div><div className="eyebrow">One record, multiple destinations</div><h2>Choose the handoff that matches the clinic.</h2><p>Portable files remain patient-owned. The OpenEMR adapter adds authorization, explicit patient matching, a write preview, and an import receipt.</p></div>
       </div>
       <div className="transfer-metrics">
         <div><strong>{packet.medications.length}</strong><span>medications</span></div>
@@ -107,6 +108,12 @@ export function Transfer() {
         <div><strong>{packet.sources.length}</strong><span>linked sources</span></div>
         <div><strong>{totalResources}</strong><span>FHIR resources</span></div>
       </div>
+    </section>
+
+    <section className="openemr-transfer-card">
+      <div className="export-card-icon fhir"><Database size={24}/></div>
+      <div><div className="eyebrow">Direct EHR handoff</div><h2>Send reviewed intake to OpenEMR</h2><p>SMART authorization, capability discovery, exact patient selection, DocumentReference-first import, optional discrete data, and a durable receipt.</p></div>
+      <Link className="button primary" to="/openemr">Open OpenEMR adapter</Link>
     </section>
 
     <div className="export-card-grid">
@@ -146,20 +153,20 @@ export function Transfer() {
         <div className="resource-count-list">
           {Object.entries(fhirExport.resourceCounts).sort(([a],[b])=>a.localeCompare(b)).map(([resourceType,count])=><div key={resourceType}><span>{formatResourceName(resourceType)}</span><strong>{count}</strong></div>)}
         </div>
-        <div className="fhir-note"><Info size={16}/><span>This is a FHIR R4 <strong>collection</strong> Bundle, designed for transport and demonstration. It is not automatically posted to an EHR or certified against a receiving implementation guide.</span></div>
+        <div className="fhir-note"><Info size={16}/><span>This is a FHIR R4 <strong>collection</strong> Bundle, designed for transport and demonstration. The OpenEMR adapter performs a separate capability-checked, reviewed import.</span></div>
       </section>
 
       <section className="card export-safety-card">
         <div className="card-heading"><div><div className="eyebrow">Handoff integrity</div><h2>What Vital Passport preserves</h2></div><span className="soft-icon"><ShieldCheck size={20}/></span></div>
         <div className="integrity-list">
-          <div><CheckCircle2 size={17}/><span><strong>Patient control</strong><small>The export is initiated by the patient and creates a copy.</small></span></div>
+          <div><CheckCircle2 size={17}/><span><strong>Patient control</strong><small>The export or EHR handoff is explicitly initiated by the patient.</small></span></div>
           <div><CheckCircle2 size={17}/><span><strong>Source provenance</strong><small>Document references and provenance travel with structured facts.</small></span></div>
-          <div><CheckCircle2 size={17}/><span><strong>Visible uncertainty</strong><small>Conflicts are exported as unknown or review-needed, never silently resolved.</small></span></div>
+          <div><CheckCircle2 size={17}/><span><strong>Visible uncertainty</strong><small>Conflicts remain review-needed and are never converted into orders.</small></span></div>
         </div>
         {fhirExport.warnings.length > 0 && <div className="export-warning-list"><strong>Export warnings</strong>{fhirExport.warnings.map((warning)=><div key={warning}><TriangleAlert size={14}/><span>{warning}</span></div>)}</div>}
       </section>
     </div>
 
-    <div className="transfer-footer-note"><ShieldCheck size={17}/><span>These files can contain sensitive health information. Store and transmit them only through channels the patient trusts.</span></div>
+    <div className="transfer-footer-note"><ShieldCheck size={17}/><span>These files and EHR transfers can contain sensitive health information. Use only systems and channels authorized by the patient and clinic.</span></div>
   </div>
 }
