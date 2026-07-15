@@ -31,7 +31,7 @@ function loadImage(file: File): Promise<HTMLImageElement> {
 
 export async function imageFileToDataUrl(file: File): Promise<string> {
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-    throw new ExtractionError('For live AI extraction, use a JPG, PNG, or WebP image. You can also paste text from a PDF.', 'UNSUPPORTED_FILE')
+    throw new ExtractionError('Use a JPG, PNG, WebP, or PDF document for live extraction.', 'UNSUPPORTED_FILE')
   }
 
   const image = await loadImage(file)
@@ -50,6 +50,8 @@ interface ExtractHealthItemInput {
   text?: string
   imageDataUrl?: string
   fileName?: string
+  pageNumber?: number
+  pageCount?: number
 }
 
 export async function extractHealthItem(input: ExtractHealthItemInput): Promise<HealthExtraction> {
@@ -64,4 +66,75 @@ export async function extractHealthItem(input: ExtractHealthItemInput): Promise<
     throw new ExtractionError(payload.error || 'Vital Passport could not organize this item.', payload.code)
   }
   return payload.extraction
+}
+
+function normalized(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+function uniqueStrings(values: string[]) {
+  const seen = new Set<string>()
+  return values.filter((value) => {
+    const key = normalized(value)
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function uniqueBy<T>(values: T[], keyFor: (value: T) => string) {
+  const seen = new Set<string>()
+  return values.filter((value) => {
+    const key = normalized(keyFor(value))
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+export function mergeHealthExtractions(
+  extractions: HealthExtraction[],
+  fileName: string,
+  pageCount: number,
+): HealthExtraction {
+  if (!extractions.length) throw new ExtractionError('No PDF pages were extracted.', 'EMPTY_PDF_EXTRACTION')
+  if (extractions.length === 1) {
+    return {
+      ...extractions[0],
+      source_pages: extractions[0].source_pages || [1],
+      page_count: pageCount,
+    }
+  }
+
+  const sourcePages = [...new Set(extractions.flatMap((extraction) => extraction.source_pages || []))].sort((a, b) => a - b)
+  const documentType = extractions.find((extraction) => extraction.document_type !== 'other')?.document_type || 'other'
+  const summaries = uniqueStrings(extractions.map((extraction) => extraction.summary).filter(Boolean))
+  const titleFromFile = fileName.replace(/\.pdf$/i, '').replace(/[-_]+/g, ' ').trim()
+  const models = uniqueStrings(extractions.map((extraction) => extraction.model || '').filter(Boolean))
+  const confidences = extractions.map((extraction) => extraction.confidence).filter(Number.isFinite)
+
+  return {
+    document_type: documentType,
+    title: extractions.find((extraction) => extraction.title && !/health information/i.test(extraction.title))?.title || titleFromFile || 'PDF health document',
+    summary: summaries.join(' ').slice(0, 900) || `${sourcePages.length} selected PDF pages were extracted for patient review.`,
+    event_date: extractions.find((extraction) => extraction.event_date)?.event_date || '',
+    facility: extractions.find((extraction) => extraction.facility)?.facility || '',
+    medications: uniqueBy(extractions.flatMap((extraction) => extraction.medications), (medication) => `${medication.name}|${medication.strength}|${medication.directions}`),
+    lab_results: uniqueBy(extractions.flatMap((extraction) => extraction.lab_results), (result) => `${result.test}|${result.value}|${result.unit}`),
+    diagnoses: uniqueStrings(extractions.flatMap((extraction) => extraction.diagnoses)),
+    instructions: uniqueStrings(extractions.flatMap((extraction) => extraction.instructions)),
+    symptoms: uniqueStrings(extractions.flatMap((extraction) => extraction.symptoms)),
+    follow_up: uniqueStrings(extractions.map((extraction) => extraction.follow_up).filter(Boolean)).join(' · '),
+    evidence: uniqueBy(
+      extractions.flatMap((extraction) => extraction.evidence),
+      (evidence) => `${evidence.page || 0}|${evidence.field}|${evidence.value}|${evidence.quote}`,
+    ).sort((a, b) => (a.page || 0) - (b.page || 0)),
+    warnings: uniqueStrings(extractions.flatMap((extraction) => extraction.warnings)),
+    requires_confirmation: extractions.some((extraction) => extraction.requires_confirmation),
+    confidence: confidences.length ? confidences.reduce((sum, value) => sum + value, 0) / confidences.length : 0,
+    model: models.join(', '),
+    mode: extractions.some((extraction) => extraction.mode === 'live') ? 'live' : 'demo',
+    source_pages: sourcePages,
+    page_count: pageCount,
+  }
 }
