@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import { AuthProvider } from './context/AuthContext'
+import { CheckInProvider } from './context/CheckInContext'
 import { CloudSyncProvider } from './context/CloudSyncContext'
 import { HealthInboxProvider } from './context/HealthInboxContext'
 import { VitalProvider } from './context/VitalContext'
@@ -17,9 +18,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <AuthProvider>
         <VitalProvider>
           <HealthInboxProvider>
-            <CloudSyncProvider>
-              <App />
-            </CloudSyncProvider>
+            <CheckInProvider>
+              <CloudSyncProvider>
+                <App />
+              </CloudSyncProvider>
+            </CheckInProvider>
           </HealthInboxProvider>
         </VitalProvider>
       </AuthProvider>
