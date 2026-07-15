@@ -1,7 +1,8 @@
-import { AlertCircle, ArrowRight, BellRing, Bot, CalendarClock, CheckCircle2, ChevronRight, CircleCheck, CircleDashed, FileText, GitCompareArrows, HeartPulse, Inbox as InboxIcon, ListChecks, Pill, ScanSearch, Sparkles, TestTube2 } from 'lucide-react'
+import { AlertCircle, ArrowRight, BellRing, Bot, Brain, CalendarClock, CheckCircle2, ChevronRight, CircleCheck, CircleDashed, FileText, GitCompareArrows, HeartPulse, Inbox as InboxIcon, ListChecks, Pill, ScanSearch, Sparkles, TestTube2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { ProgressRing } from '../components/ProgressRing'
 import { useCheckIns } from '../context/CheckInContext'
+import { useCopilotMemory } from '../context/CopilotMemoryContext'
 import { useHealthInbox } from '../context/HealthInboxContext'
 import { useVital } from '../context/VitalContext'
 import { patient } from '../data/demo'
@@ -33,6 +34,7 @@ export function Dashboard() {
   } = useVital()
   const { pendingFindings, pendingCount } = useHealthInbox()
   const { nextSchedule, dueCount, startCheckIn } = useCheckIns()
+  const { activeMemories } = useCopilotMemory()
   const openTasks=careTasks.filter((task)=>task.status==='open')
   const metoprololIssue=reconciliationIssues.find((issue)=>issue.id==='issue-metoprolol')
   const displayedIssues=[...reconciliationIssues].sort((a,b)=>a.status===b.status?b.createdAt.localeCompare(a.createdAt):a.status==='open'?-1:1).slice(0,3)
@@ -53,10 +55,16 @@ export function Dashboard() {
           <div className="copilot-launch-prompts">
             <button onClick={() => openCopilotDrawer('What changed in my health record recently?')}>What changed recently?</button>
             <button onClick={() => openCopilotDrawer('What should I clarify before my next visit?')}>What should I clarify?</button>
-            <button onClick={() => openCopilotDrawer('Summarize my medications and any conflicts.')}>Check my medications</button>
+            <button onClick={() => openCopilotDrawer('What do you remember about my goals and preferences?')}>What do you remember?</button>
           </div>
         </div>
         <button onClick={() => openCopilotDrawer()} className="button primary copilot-launch-button">Open Health Copilot <ArrowRight size={17}/></button>
+      </section>
+
+      <section className="dashboard-memory-preview">
+        <span><Brain size={20}/></span>
+        <div><div className="eyebrow">Copilot memory</div><h2>{activeMemories.length} patient-controlled {activeMemories.length === 1 ? 'item' : 'items'}</h2><p>{activeMemories[0]?.value || 'Nothing is remembered unless you explicitly choose it.'}</p></div>
+        <Link to="/memory" className="text-link">Manage memory <ChevronRight size={16}/></Link>
       </section>
 
       <section className="dashboard-inbox-preview">
