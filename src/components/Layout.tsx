@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { patient } from '../data/demo'
 import { useVital } from '../context/VitalContext'
+import { AccountPanel } from './AccountPanel'
 import { Logo } from './Logo'
 import { SourceDrawer } from './SourceDrawer'
 
@@ -42,6 +43,8 @@ export function Layout() {
           ))}
         </nav>
 
+        <div className="sidebar-account"><AccountPanel /></div>
+
         <button className="demo-reset" onClick={handleReset}>
           <RotateCcw size={16} />
           <span><strong>Reset demo</strong><small>Return Maria to the starting state</small></span>
@@ -68,7 +71,7 @@ export function Layout() {
         <header className="mobile-header">
           <button className="icon-button" onClick={() => setMobileOpen(true)} aria-label="Open menu"><Menu size={22} /></button>
           <Logo compact />
-          <div className="avatar small">{patient.initials}</div>
+          <AccountPanel compact />
         </header>
         <Outlet />
       </main>
