@@ -75,6 +75,17 @@ async function confidentialTokenApi<T>(body: unknown): Promise<T> {
   return payload as T
 }
 
+async function patientSearchApi<T>(body: unknown): Promise<T> {
+  const response = await fetch('/api/openemr-patients', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(payload.error || `OpenEMR patient search failed (${response.status}).`)
+  return payload as T
+}
+
 function base64Url(bytes: Uint8Array) {
   let binary = ''
   bytes.forEach((byte) => { binary += String.fromCharCode(byte) })
@@ -156,7 +167,7 @@ export function disconnectOpenEmr() {
 export async function searchOpenEmrPatients(query: { name?: string; birthDate?: string; identifier?: string }) {
   const token = readOpenEmrToken()
   if (!token) throw new Error('Connect OpenEMR before searching patients.')
-  const result = await api<{ patients: OpenEmrPatient[] }>('patients', { accessToken: token.accessToken, query })
+  const result = await patientSearchApi<{ patients: OpenEmrPatient[]; matchQuality: 'unique' | 'review' | 'none' }>({ accessToken: token.accessToken, query })
   return result.patients
 }
 
