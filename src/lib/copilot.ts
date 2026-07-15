@@ -1,3 +1,4 @@
+import type { CopilotMemoryItem } from '../context/CopilotMemoryContext'
 import { patient } from '../data/demo'
 import type { CareTask, ClinicalLabResult, MedicationSummary, ReconciliationIssue, SourceRecord, TimelineEvent } from '../types'
 
@@ -40,6 +41,7 @@ export interface HealthRecordSnapshotInput {
   reconciliationIssues: ReconciliationIssue[]
   careTasks: CareTask[]
   reviewGaps: Array<{ label: string; detail: string; source: string; resolved: boolean }>
+  memories: CopilotMemoryItem[]
 }
 
 type InboxSnapshotFinding = {
@@ -75,6 +77,7 @@ function readHealthInbox() {
 
 export function buildHealthRecordSnapshot(input: HealthRecordSnapshotInput) {
   const inbox = readHealthInbox()
+  const activeMemories = input.memories.filter((memory) => !memory.forgottenAt).slice(0, 40)
   return {
     patient: {
       name: patient.name,
@@ -90,7 +93,20 @@ export function buildHealthRecordSnapshot(input: HealthRecordSnapshotInput) {
       unresolved_history_gap_count: input.reviewGaps.filter((gap) => !gap.resolved).length,
       pending_health_inbox_count: inbox.pending.length,
       recently_reviewed_health_inbox_count: inbox.recentlyReviewed.length,
+      patient_controlled_memory_count: activeMemories.length,
     },
+    patient_controlled_memory: activeMemories.map((memory) => ({
+      id: memory.id,
+      type: memory.kind,
+      title: memory.title,
+      value: memory.value,
+      origin: memory.origin,
+      source_id: memory.sourceId || null,
+      updated_at: memory.updatedAt,
+      evidence_boundary: memory.sourceId
+        ? 'Patient-controlled context linked to a source. Verify the source before treating it as a medical fact.'
+        : 'Patient-controlled context only. This is not source evidence or a confirmed clinical fact.',
+    })),
     health_inbox: {
       pending: inbox.pending.map((finding) => ({
         id: finding.id,
