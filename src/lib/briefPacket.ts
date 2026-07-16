@@ -6,7 +6,7 @@ import {
   sources as demoSources,
   timeline as demoTimeline,
 } from '../data/demo'
-import { calculatePatientAge, type PatientProfile } from './patientProfile'
+import { calculatePatientAge, readStoredPatientProfile, type PatientProfile } from './patientProfile'
 import type {
   CareTask,
   ClinicalLabResult,
@@ -19,7 +19,7 @@ import type {
 } from '../types'
 
 interface BuildSharedBriefPacketInput {
-  profile: PatientProfile
+  profile?: PatientProfile
   answers: InterviewAnswers
   readiness: number
   openGapCount: number
@@ -96,6 +96,7 @@ function confirmedSignalTimeline(): TimelineEvent[] {
 }
 
 export function buildSharedBriefPacket(input: BuildSharedBriefPacketInput): SharedBriefPacket {
+  const profile = input.profile || readStoredPatientProfile()
   const selectedTimeline = [...input.timelineEvents, ...confirmedSignalTimeline()]
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(-10)
@@ -115,12 +116,12 @@ export function buildSharedBriefPacket(input: BuildSharedBriefPacketInput): Shar
     schemaVersion: 1,
     preparedAt: new Date().toISOString(),
     patient: {
-      name: input.profile.name || 'Patient profile incomplete',
-      age: calculatePatientAge(input.profile.dob) || 0,
-      dob: input.profile.dob,
-      pronouns: input.profile.pronouns,
-      conditions: [...input.profile.conditions],
-      allergies: [...input.profile.allergies],
+      name: profile.name || 'Patient profile incomplete',
+      age: calculatePatientAge(profile.dob) || 0,
+      dob: profile.dob,
+      pronouns: profile.pronouns,
+      conditions: [...profile.conditions],
+      allergies: [...profile.allergies],
     },
     visit: {
       label: 'Patient-controlled clinical handoff',
