@@ -1,4 +1,4 @@
-import type { HealthExtraction, HealthItemType } from '../types'
+import type { HealthExtraction, HealthItemType, SourcePatientIdentity } from '../types'
 
 const MAX_IMAGE_DIMENSION = 1600
 const JPEG_QUALITY = 0.82
@@ -92,6 +92,25 @@ function uniqueBy<T>(values: T[], keyFor: (value: T) => string) {
   })
 }
 
+function mergedSourcePatient(extractions: HealthExtraction[]) {
+  const identities = extractions
+    .map((extraction) => extraction.source_patient)
+    .filter((identity): identity is SourcePatientIdentity => Boolean(identity))
+  const names = uniqueStrings(identities.map((identity) => identity.name).filter(Boolean))
+  const dobs = uniqueStrings(identities.map((identity) => identity.dob).filter(Boolean))
+  const recordNumbers = uniqueStrings(identities.map((identity) => identity.medical_record_number).filter(Boolean))
+  const identity: SourcePatientIdentity = {
+    name: names[0] || '',
+    dob: dobs[0] || '',
+    medical_record_number: recordNumbers[0] || '',
+  }
+  const warnings: string[] = []
+  if (names.length > 1) warnings.push(`Different patient names appear across the selected pages: ${names.join(' · ')}`)
+  if (dobs.length > 1) warnings.push(`Different dates of birth appear across the selected pages: ${dobs.join(' · ')}`)
+  if (recordNumbers.length > 1) warnings.push('Different medical record numbers appear across the selected pages.')
+  return { identity, warnings }
+}
+
 export function mergeHealthExtractions(
   extractions: HealthExtraction[],
   fileName: string,
@@ -112,6 +131,7 @@ export function mergeHealthExtractions(
   const titleFromFile = fileName.replace(/\.pdf$/i, '').replace(/[-_]+/g, ' ').trim()
   const models = uniqueStrings(extractions.map((extraction) => extraction.model || '').filter(Boolean))
   const confidences = extractions.map((extraction) => extraction.confidence).filter(Number.isFinite)
+  const sourcePatient = mergedSourcePatient(extractions)
 
   return {
     document_type: documentType,
@@ -119,6 +139,7 @@ export function mergeHealthExtractions(
     summary: summaries.join(' ').slice(0, 900) || `${sourcePages.length} selected PDF pages were extracted for patient review.`,
     event_date: extractions.find((extraction) => extraction.event_date)?.event_date || '',
     facility: extractions.find((extraction) => extraction.facility)?.facility || '',
+    source_patient: sourcePatient.identity,
     medications: uniqueBy(extractions.flatMap((extraction) => extraction.medications), (medication) => `${medication.name}|${medication.strength}|${medication.directions}`),
     lab_results: uniqueBy(extractions.flatMap((extraction) => extraction.lab_results), (result) => `${result.test}|${result.value}|${result.unit}`),
     diagnoses: uniqueStrings(extractions.flatMap((extraction) => extraction.diagnoses)),
@@ -129,8 +150,8 @@ export function mergeHealthExtractions(
       extractions.flatMap((extraction) => extraction.evidence),
       (evidence) => `${evidence.page || 0}|${evidence.field}|${evidence.value}|${evidence.quote}`,
     ).sort((a, b) => (a.page || 0) - (b.page || 0)),
-    warnings: uniqueStrings(extractions.flatMap((extraction) => extraction.warnings)),
-    requires_confirmation: extractions.some((extraction) => extraction.requires_confirmation),
+    warnings: uniqueStrings([...extractions.flatMap((extraction) => extraction.warnings), ...sourcePatient.warnings]),
+    requires_confirmation: extractions.some((extraction) => extraction.requires_confirmation) || sourcePatient.warnings.length > 0,
     confidence: confidences.length ? confidences.reduce((sum, value) => sum + value, 0) / confidences.length : 0,
     model: models.join(', '),
     mode: extractions.some((extraction) => extraction.mode === 'live') ? 'live' : 'demo',
