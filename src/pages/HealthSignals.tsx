@@ -1,6 +1,7 @@
-import { Activity, ArrowRight, BellRing, Bot, CheckCircle2, ChevronRight, CircleAlert, Clock3, FileHeart, Info, LineChart, ShieldCheck, Sparkles, TrendingDown, TrendingUp } from 'lucide-react'
+import { Activity, ArrowRight, BellRing, Bot, CheckCircle2, ChevronRight, CircleAlert, Clock3, FileHeart, HeartPulse, Info, LineChart, Moon, ShieldCheck, Sparkles, TrendingDown, TrendingUp, Watch } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useAppleHealthDemo } from '../context/AppleHealthDemoContext'
 import { useHealthSignals, type MetricTrend, type TrendWindow } from '../context/HealthSignalsContext'
 import { openCopilotDrawer } from '../lib/copilot-drawer'
 
@@ -29,8 +30,11 @@ function directionCopy(trend: MetricTrend) {
 
 export function HealthSignals() {
   const { signals, pendingSignals, confirmedSignals, trends, structuredResponses } = useHealthSignals()
+  const appleHealth = useAppleHealthDemo()
   const [window, setWindow] = useState<TrendWindow>('7d')
   const selectedTrends = trends[window]
+  const latestWearable = appleHealth.days[appleHealth.days.length - 1]
+  const wearableSignals = signals.filter((signal) => signal.source === 'apple_health_demo')
 
   return (
     <div className="page signals-page">
@@ -38,7 +42,7 @@ export function HealthSignals() {
         <div>
           <div className="eyebrow">Patient-reviewed pattern detection</div>
           <h1>Health signals</h1>
-          <p>Vital Passport turns repeated check-ins into explainable trends, then asks you to confirm every signal before it joins your health story.</p>
+          <p>Vital Passport turns repeated check-ins and connected measurements into explainable trends, then asks you to confirm every signal before it joins your health story.</p>
         </div>
         <div className="signals-window-toggle" aria-label="Trend window">
           <button className={window === '7d' ? 'active' : ''} onClick={() => setWindow('7d')}>7 days</button>
@@ -48,12 +52,23 @@ export function HealthSignals() {
 
       <section className="signals-hero">
         <span><Activity size={28}/></span>
-        <div><div className="eyebrow">Current signal state</div><h2>{pendingSignals.length ? `${pendingSignals.length} ${pendingSignals.length === 1 ? 'pattern needs' : 'patterns need'} your review` : 'No unreviewed patterns'}</h2><p>{structuredResponses.length} structured check-ins are available. Signals describe patterns and timing, never diagnoses or proven causes.</p></div>
+        <div><div className="eyebrow">Current signal state</div><h2>{pendingSignals.length ? `${pendingSignals.length} ${pendingSignals.length === 1 ? 'pattern needs' : 'patterns need'} your review` : 'No unreviewed patterns'}</h2><p>{structuredResponses.length} structured check-ins{appleHealth.status === 'connected' ? ` and ${appleHealth.days.length} wearable days` : ''} are available. Signals describe patterns and timing, never diagnoses or proven causes.</p></div>
         <Link to="/inbox" className="button primary">Review in Health Inbox <ArrowRight size={16}/></Link>
       </section>
 
+      <section className={`signals-wearable-strip ${appleHealth.status}`}>
+        <span><Watch size={22}/></span>
+        {appleHealth.status === 'connected' && latestWearable ? <>
+          <div><div className="eyebrow">Apple Health demo connected</div><h2>{appleHealth.days.length} days of synthetic wearable data</h2><p><Moon size={13}/> Latest sleep {latestWearable.sleepHours} hr <HeartPulse size={13}/> Resting heart rate {latestWearable.restingHeartRate} bpm · {wearableSignals.length} wearable {wearableSignals.length === 1 ? 'signal' : 'signals'}</p></div>
+          <Link to="/apple-health" className="button light">Open wearable data <ChevronRight size={16}/></Link>
+        </> : <>
+          <div><div className="eyebrow">Wearable connection</div><h2>Preview Apple Health integration</h2><p>Connect synthetic sleep and heart-rate data to test the same review pipeline planned for HealthKit.</p></div>
+          <Link to="/apple-health" className="button light">Connect demo <ChevronRight size={16}/></Link>
+        </>}
+      </section>
+
       <section className="signals-trend-section">
-        <div className="section-mini-heading"><LineChart size={18}/><strong>{window === '7d' ? 'Seven-day' : 'Thirty-day'} trends</strong><span>Scores are patient reported on a 1–10 scale.</span></div>
+        <div className="section-mini-heading"><LineChart size={18}/><strong>{window === '7d' ? 'Seven-day' : 'Thirty-day'} check-in trends</strong><span>Scores are patient reported on a 1–10 scale.</span></div>
         <div className="signals-trend-grid">
           {selectedTrends.map((trend) => {
             const DirectionIcon = trend.direction === 'improving' ? TrendingUp : trend.direction === 'worsening' ? TrendingDown : Activity
@@ -70,21 +85,21 @@ export function HealthSignals() {
         <section className="signals-stack">
           <div className="section-mini-heading"><Sparkles size={18}/><strong>Detected patterns</strong><span>Deterministic rules with visible evidence.</span></div>
           {signals.length ? signals.map((signal) => (
-            <article className={`health-signal-card ${signal.severity} ${signal.status}`} key={signal.id}>
-              <div className="health-signal-icon">{signal.status === 'confirmed' || signal.status === 'edited' ? <CheckCircle2 size={20}/> : signal.severity === 'attention' ? <CircleAlert size={20}/> : <Info size={20}/>}</div>
+            <article className={`health-signal-card ${signal.severity} ${signal.status} ${signal.source === 'apple_health_demo' ? 'wearable' : ''}`} key={signal.id}>
+              <div className="health-signal-icon">{signal.status === 'confirmed' || signal.status === 'edited' ? <CheckCircle2 size={20}/> : signal.source === 'apple_health_demo' ? <Watch size={20}/> : signal.severity === 'attention' ? <CircleAlert size={20}/> : <Info size={20}/>}</div>
               <div className="health-signal-body">
-                <div className="health-signal-heading"><div><span>{signal.severity === 'attention' ? 'Attention signal' : 'Watch signal'}</span><h3>{signal.title}</h3></div><em>{signal.status === 'pending' || signal.status === 'not_queued' ? 'Needs review' : signal.status}</em></div>
+                <div className="health-signal-heading"><div><span>{signal.source === 'apple_health_demo' ? 'Apple Health demo signal' : signal.severity === 'attention' ? 'Attention signal' : 'Watch signal'}</span><h3>{signal.title}</h3></div><em>{signal.status === 'pending' || signal.status === 'not_queued' ? 'Needs review' : signal.status}</em></div>
                 <p>{signal.detail}</p>
                 <details><summary>Why Vital Passport noticed this <ChevronRight size={14}/></summary><ul>{signal.evidence.map((evidence) => <li key={evidence}>{evidence}</li>)}</ul></details>
                 <div className="health-signal-actions">
                   <Link to="/inbox">Review signal <ChevronRight size={14}/></Link>
-                  <button onClick={() => openCopilotDrawer(`Explain this health signal conservatively: ${signal.title}. Use the check-in evidence, preserve uncertainty, and do not claim causation.`)}><Bot size={14}/> Ask Copilot</button>
+                  <button onClick={() => openCopilotDrawer(`Explain this health signal conservatively: ${signal.title}. Use the visible source evidence, preserve uncertainty, and do not claim causation or clinical significance.`)}><Bot size={14}/> Ask Copilot</button>
                   <Link to="/prepare"><BellRing size={14}/> Add to visit prep</Link>
                   {(signal.status === 'confirmed' || signal.status === 'edited') && <Link to="/brief"><FileHeart size={14}/> View in brief</Link>}
                 </div>
               </div>
             </article>
-          )) : <div className="signals-empty"><Activity size={24}/><strong>No signals yet</strong><span>Complete a few structured check-ins to begin detecting patterns.</span></div>}
+          )) : <div className="signals-empty"><Activity size={24}/><strong>No signals yet</strong><span>Complete structured check-ins or connect the Apple Health demo to begin detecting patterns.</span></div>}
         </section>
 
         <aside className="signals-recent-panel">
@@ -94,7 +109,7 @@ export function HealthSignals() {
             {structuredResponses.slice(0, 8).map((response) => <div key={response.id}><span><strong>{formatDate(response.createdAt)}</strong>{response.demo && <em>Demo</em>}</span><p>{response.response || 'Scores recorded without an additional note.'}</p><small>Mood {response.metrics.mood} · Sleep {response.metrics.sleep} · Stress {response.metrics.stress} · Symptoms {response.metrics.symptomSeverity}</small></div>)}
           </div>
           <Link to="/check-ins" className="button light signals-checkin-link">Complete another check-in <ArrowRight size={16}/></Link>
-          <div className="signals-safety-note"><ShieldCheck size={16}/><span>Signals are generated locally from recorded scores. They do not continuously monitor the patient, diagnose conditions, or establish why a change happened.</span></div>
+          <div className="signals-safety-note"><ShieldCheck size={16}/><span>Signals are generated locally from recorded scores and synthetic wearable summaries. They do not continuously monitor the patient, diagnose conditions, determine clinical significance, or establish why a change happened.</span></div>
         </aside>
       </div>
     </div>
