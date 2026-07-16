@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { AddHealth } from './pages/AddHealth'
+import { AppleHealthDemo } from './pages/AppleHealthDemo'
 import { Brief } from './pages/Brief'
 import { CheckIns } from './pages/CheckIns'
 import { Copilot } from './pages/Copilot'
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="inbox" element={<HealthInbox />} />
         <Route path="check-ins" element={<CheckIns />} />
         <Route path="signals" element={<HealthSignals />} />
+        <Route path="apple-health" element={<AppleHealthDemo />} />
         <Route path="add" element={<AddHealth />} />
         <Route path="timeline" element={<Timeline />} />
         <Route path="prepare" element={<Prepare />} />
