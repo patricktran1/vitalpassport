@@ -17,6 +17,7 @@ export function AccountPanel({ compact = false }: { compact?: boolean }) {
   const [open, setOpen] = useState(false)
   const [email, setEmail] = useState('')
   const [sending, setSending] = useState(false)
+  const [signingGoogle, setSigningGoogle] = useState(false)
   const [message, setMessage] = useState('')
   const [actionError, setActionError] = useState('')
   const auth = useAuth()
@@ -45,6 +46,18 @@ export function AccountPanel({ compact = false }: { compact?: boolean }) {
       setActionError(error instanceof Error ? error.message : 'The sign-in link could not be sent.')
     } finally {
       setSending(false)
+    }
+  }
+
+  const googleSignIn = async () => {
+    setSigningGoogle(true)
+    setMessage('')
+    setActionError('')
+    try {
+      await auth.signInWithGoogle()
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Google sign-in could not start.')
+      setSigningGoogle(false)
     }
   }
 
@@ -129,7 +142,7 @@ export function AccountPanel({ compact = false }: { compact?: boolean }) {
             ? 'Maria’s records, check-ins, wearable data, and Inbox decisions stay in the demo workspace. They are never uploaded automatically, even when you are signed in.'
             : sync.legacyDemoCloud
               ? 'An older test uploaded Maria’s synthetic bundle to this account. Vital Passport recognized it and did not load it into your personal workspace. Reset the cloud record to continue with a blank Passport.'
-              : auth.user ? `Signed in as ${auth.user.email}. Core records, check-ins, Inbox decisions, Copilot memory, signals, and wearable summaries save automatically.` : 'Vital Passport keeps working without an account. Supabase adds authenticated storage and cross-device continuity.'}</p>
+              : auth.user ? `Signed in as ${auth.user.email}. Core records, check-ins, Inbox decisions, Copilot memory, signals, wearable summaries, and private source metadata save to your account.` : 'Vital Passport keeps working without an account. Supabase adds authenticated storage and cross-device continuity.'}</p>
           {auth.user&&!workspace.isDemo&&<small>Last cloud activity: {formatSyncTime(sync.lastSyncedAt)} · Bundle schema v{sync.schemaVersion}</small>}
         </div>
       </div>
@@ -142,13 +155,17 @@ export function AccountPanel({ compact = false }: { compact?: boolean }) {
 
       {!workspace.isDemo&&workspace.isDemoCopy&&<div className="workspace-account-card"><FlaskConical size={18}/><div><strong>Personal sandbox copied from Maria</strong><p>This account currently contains synthetic demo information. Reset to blank before entering your own information.</p></div></div>}
 
-      {auth.user&&!workspace.isDemo&&!sync.legacyDemoCloud&&<div className="account-module-card"><Database size={18}/><div><strong>{sync.syncedModules.length} synchronized data groups</strong><p>{sync.syncedModules.join(' · ')}</p></div></div>}
+      {auth.user&&!workspace.isDemo&&!sync.legacyDemoCloud&&<div className="account-module-card"><Database size={18}/><div><strong>{sync.syncedModules.length} synchronized data groups</strong><p>{sync.syncedModules.join(' · ')} · Private source metadata</p></div></div>}
 
-      {auth.configured&&!auth.user&&<form className="account-form" onSubmit={submit}>
-        <label htmlFor="account-email">Email address</label>
-        <div className="account-email-row"><Mail size={17}/><input id="account-email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required/></div>
-        <button className="button primary full" disabled={sending}>{sending?<><LoaderCircle size={16}/> Sending link…</>:<>Send secure sign-in link</>}</button>
-      </form>}
+      {auth.configured&&!auth.user&&<div className="account-auth-options">
+        <button className="account-google-button" onClick={()=>void googleSignIn()} disabled={signingGoogle||sending}><span className="google-mark">G</span>{signingGoogle?'Opening Google…':'Continue with Google'}</button>
+        <div className="account-auth-divider"><span>or use email</span></div>
+        <form className="account-form" onSubmit={submit}>
+          <label htmlFor="account-email">Email address</label>
+          <div className="account-email-row"><Mail size={17}/><input id="account-email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required/></div>
+          <button className="button primary full" disabled={sending||signingGoogle}>{sending?<><LoaderCircle size={16}/> Sending link…</>:<>Send secure sign-in link</>}</button>
+        </form>
+      </div>}
 
       {workspace.isDemo&&<div className="account-actions">
         <button className="button primary" onClick={workspace.startPersonal}><UserRoundPlus size={16}/> Start my blank Passport</button>
@@ -178,7 +195,7 @@ export function AccountPanel({ compact = false }: { compact?: boolean }) {
       </div>}
 
       {(message||actionError||sync.error)&&<div className={`account-message ${actionError||sync.error?'error':''}`}>{actionError || sync.error || message}</div>}
-      <p className="account-privacy"><ShieldCheck size={14}/> Personal account rows are restricted by Supabase Auth and database Row Level Security. This remains a prototype and still requires a full privacy, security, retention, HIPAA, and clinical-safety review before real patient use.</p>
+      <p className="account-privacy"><ShieldCheck size={14}/> Personal account rows and source files are restricted by Supabase Auth and database Row Level Security. This remains a prototype and still requires a full privacy, security, retention, HIPAA, and clinical-safety review before real patient use.</p>
     </Modal>}
   </>
 }
