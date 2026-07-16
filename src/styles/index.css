@@ -1,5 +1,6 @@
 @import './base.css';
 @import './capture-timeline.css';
+@import './file-drop.css';
 @import './source-identity.css';
 @import './prepare-brief.css';
 @import './reconciliation.css';
