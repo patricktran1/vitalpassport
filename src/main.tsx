@@ -7,6 +7,7 @@ import { CheckInProvider } from './context/CheckInContext'
 import { CloudSyncProvider } from './context/CloudSyncContext'
 import { CopilotMemoryProvider } from './context/CopilotMemoryContext'
 import { HealthInboxProvider } from './context/HealthInboxContext'
+import { HealthSignalsProvider } from './context/HealthSignalsContext'
 import { VitalProvider } from './context/VitalContext'
 import { hydrateSessionFromLocalRecord } from './lib/recordStorage'
 import './styles/index.css'
@@ -21,9 +22,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <HealthInboxProvider>
             <CopilotMemoryProvider>
               <CheckInProvider>
-                <CloudSyncProvider>
-                  <App />
-                </CloudSyncProvider>
+                <HealthSignalsProvider>
+                  <CloudSyncProvider>
+                    <App />
+                  </CloudSyncProvider>
+                </HealthSignalsProvider>
               </CheckInProvider>
             </CopilotMemoryProvider>
           </HealthInboxProvider>
