@@ -160,8 +160,10 @@ export function Layout() {
       </main>
       {mobileOpen && <button className="sidebar-overlay" aria-label="Close menu" onClick={() => setMobileOpen(false)} />}
       {location.pathname !== '/copilot' && !copilotOpen && (
-        <button className="copilot-drawer-launcher" onClick={() => openCopilot()} aria-label="Open Health Copilot" aria-expanded="false">
-          <span><Bot size={21}/></span><strong>Health Copilot</strong><Sparkles size={15}/>
+        <button className="copilot-drawer-launcher" onClick={() => openCopilot()} aria-label="Ask Health Copilot a question" aria-expanded="false">
+          <span className="copilot-helper-orb"><Bot size={23}/></span>
+          <span className="copilot-helper-copy"><small>Have a health question?</small><strong>Ask Health Copilot</strong></span>
+          <Sparkles className="copilot-helper-spark" size={17}/>
         </button>
       )}
       {location.pathname !== '/copilot' && copilotOpen && (
