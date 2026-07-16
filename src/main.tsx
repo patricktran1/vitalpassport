@@ -27,6 +27,9 @@ function ProductApp() {
   if (!mode) return <WorkspaceOnboarding />
 
   hydrateSessionFromLocalRecord()
+  if (mode === 'personal' && window.sessionStorage.getItem('vital-health-inbox-v1') === null) {
+    window.sessionStorage.setItem('vital-health-inbox-v1', '[]')
+  }
 
   return (
     <WorkspaceProvider mode={mode}>
