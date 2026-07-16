@@ -1,13 +1,13 @@
-import { Activity, ArrowUpFromLine, BellRing, Bot, Brain, CalendarDays, ChevronRight, ClipboardList, FileHeart, Home, Inbox as InboxIcon, Menu, PlusCircle, RotateCcw, ShieldCheck, Sparkles, Watch, X } from 'lucide-react'
+import { Activity, ArrowUpFromLine, BellRing, Bot, Brain, CalendarDays, ChevronRight, ClipboardList, FileHeart, FlaskConical, Home, Inbox as InboxIcon, Menu, PlusCircle, RotateCcw, ShieldCheck, Sparkles, Watch, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { patient } from '../data/demo'
 import { useAppleHealthDemo } from '../context/AppleHealthDemoContext'
 import { useCheckIns } from '../context/CheckInContext'
 import { useCopilotMemory } from '../context/CopilotMemoryContext'
 import { useHealthInbox } from '../context/HealthInboxContext'
 import { useHealthSignals } from '../context/HealthSignalsContext'
-import { useVital } from '../context/VitalContext'
+import { useWorkspace } from '../context/WorkspaceContext'
 import { COPILOT_DRAWER_EVENT, type CopilotDrawerRequest } from '../lib/copilot-drawer'
 import { AccountPanel } from './AccountPanel'
 import { CheckInPrompt } from './CheckInPrompt'
@@ -28,14 +28,13 @@ export function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [copilotOpen, setCopilotOpen] = useState(false)
   const [promptRequest, setPromptRequest] = useState({ id: 0, prompt: '' })
-  const navigate = useNavigate()
   const location = useLocation()
-  const { resetDemo } = useVital()
-  const { pendingCount, resetInbox } = useHealthInbox()
-  const { dueCount, resetCheckIns } = useCheckIns()
-  const { activeMemories, resetMemory } = useCopilotMemory()
+  const workspace = useWorkspace()
+  const { pendingCount } = useHealthInbox()
+  const { dueCount } = useCheckIns()
+  const { activeMemories } = useCopilotMemory()
   const { pendingSignalCount } = useHealthSignals()
-  const { status: appleHealthStatus, resetAppleHealthDemo } = useAppleHealthDemo()
+  const { status: appleHealthStatus } = useAppleHealthDemo()
 
   const openCopilot = (prompt = '') => {
     setPromptRequest({ id: Date.now(), prompt })
@@ -53,14 +52,9 @@ export function Layout() {
   }, [])
 
   const handleReset = () => {
-    resetDemo()
-    resetInbox()
-    resetCheckIns()
-    resetMemory()
-    resetAppleHealthDemo()
-    setMobileOpen(false)
-    setCopilotOpen(false)
-    navigate('/')
+    const label = workspace.isDemo ? 'Restore Maria’s demo to its original synthetic state?' : 'Reset this local personal workspace to a blank Passport?'
+    if (!window.confirm(label)) return
+    workspace.resetCurrent()
   }
 
   return (
@@ -90,9 +84,9 @@ export function Layout() {
           <NavLink to="/signals" onClick={() => setMobileOpen(false)} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <Activity size={19}/><span>Health signals</span>{pendingSignalCount > 0 && <small className="nav-signals-badge">{pendingSignalCount}</small>}
           </NavLink>
-          <NavLink to="/apple-health" onClick={() => setMobileOpen(false)} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+          {workspace.isDemo&&<NavLink to="/apple-health" onClick={() => setMobileOpen(false)} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <Watch size={19}/><span>Apple Health demo</span>{appleHealthStatus === 'connected' && <small className="nav-health-badge">On</small>}
-          </NavLink>
+          </NavLink>}
           {navItems.slice(1).map(({ to, label, icon: Icon }) => (
             <NavLink key={to} to={to} onClick={() => setMobileOpen(false)} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
               <Icon size={19} />
@@ -105,7 +99,7 @@ export function Layout() {
 
         <button className="demo-reset" onClick={handleReset}>
           <RotateCcw size={16} />
-          <span><strong>Reset demo</strong><small>Return Maria to the starting state</small></span>
+          <span><strong>{workspace.isDemo ? 'Reset Maria demo' : 'Reset local workspace'}</strong><small>{workspace.isDemo ? 'Return synthetic data to the start' : 'Start a blank personal Passport'}</small></span>
         </button>
 
         <div className="sidebar-trust">
@@ -117,15 +111,17 @@ export function Layout() {
         </div>
 
         <div className="patient-mini">
-          <div className="avatar">{patient.initials}</div>
+          <div className="avatar">{workspace.isDemo ? patient.initials : 'ME'}</div>
           <div>
-            <strong>{patient.name}</strong>
-            <span>Personal health profile</span>
+            <strong>{workspace.isDemo ? patient.name : 'My Vital Passport'}</strong>
+            <span>{workspace.isDemo ? 'Synthetic demonstration' : 'Personal health profile'}</span>
           </div>
         </div>
       </aside>
 
       <main className="main-content">
+        {workspace.isDemo&&<div className="demo-mode-banner"><FlaskConical size={17}/><div><strong>Maria demo mode</strong><span>You are viewing entirely synthetic information. This workspace does not sync to your account automatically.</span></div><button onClick={workspace.startPersonal}>Start my own Passport</button></div>}
+        {!workspace.isDemo&&workspace.isDemoCopy&&<div className="demo-mode-banner personal-sandbox-banner"><FlaskConical size={17}/><div><strong>Synthetic sandbox copied from Maria</strong><span>Reset to blank before entering your own health information.</span></div><button onClick={handleReset}>Reset to blank</button></div>}
         <header className="mobile-header">
           <button className="icon-button" onClick={() => setMobileOpen(true)} aria-label="Open menu"><Menu size={22} /></button>
           <Logo compact />

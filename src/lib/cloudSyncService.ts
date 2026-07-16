@@ -52,3 +52,8 @@ export async function saveCloudBundle(client: SupabaseClient, userId: string, bu
   if (error) throw new Error(cloudErrorMessage(error))
   return syncedAt
 }
+
+export async function deleteCloudBundle(client: SupabaseClient, userId: string) {
+  const { error } = await client.from('patient_records').delete().eq('user_id', userId)
+  if (error) throw new Error(cloudErrorMessage(error))
+}
