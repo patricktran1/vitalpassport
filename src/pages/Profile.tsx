@@ -1,13 +1,10 @@
-import { Camera, Check, CircleUserRound, Mail, MapPin, Phone, ShieldCheck, Trash2, UserRound } from 'lucide-react'
+import { Camera, Check, CircleUserRound, Mail, MapPin, Phone, PlusCircle, ShieldCheck, Trash2, UserRound } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { usePatientProfile } from '../context/PatientProfileContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { patientInitials, prepareProfilePhoto, type PatientProfile } from '../lib/patientProfile'
-
-function linesToList(value: string) {
-  return value.split(/\n|,/).map((item) => item.trim()).filter(Boolean)
-}
 
 export function Profile() {
   const { profile, updateProfile, age } = usePatientProfile()
@@ -51,7 +48,7 @@ export function Profile() {
 
   return <div className="page profile-page">
     <section className="page-heading split-heading profile-heading">
-      <div><div className="eyebrow">Patient identity and contact</div><h1>My profile</h1><p>This is the identity attached to your Passport, clinician brief, and transfer packets. Names printed on uploaded records are still checked independently.</p></div>
+      <div><div className="eyebrow">Patient demographics and contact</div><h1>My profile</h1><p>This is the demographic identity attached to your Passport, clinician brief, and transfer packets. Health information is managed separately with source review and patient confirmation.</p></div>
       <div className="profile-avatar-large">{draft.photoDataUrl ? <img src={draft.photoDataUrl} alt="Patient profile"/> : initials}</div>
     </section>
 
@@ -93,10 +90,9 @@ export function Profile() {
         <label><span>Phone number</span><input type="tel" value={draft.emergencyContactPhone} onChange={(event)=>setDraft((current)=>({...current,emergencyContactPhone:event.target.value}))} placeholder="(555) 555-0123"/></label>
       </div>
 
-      <div className="profile-section-heading"><ShieldCheck size={20}/><div><strong>Clinical basics</strong><span>These appear in clinician-facing summaries when present</span></div></div>
-      <div className="profile-clinical-grid">
-        <label className="profile-list-field"><span>Conditions</span><textarea value={draft.conditions.join('\n')} onChange={(event)=>setDraft((current)=>({...current,conditions:linesToList(event.target.value)}))} rows={5} placeholder="One condition per line"/></label>
-        <label className="profile-list-field"><span>Allergies</span><textarea value={draft.allergies.join('\n')} onChange={(event)=>setDraft((current)=>({...current,allergies:linesToList(event.target.value)}))} rows={5} placeholder="One allergy per line, or leave blank"/></label>
+      <div className="profile-health-handoff">
+        <div><strong>Health information lives in your health record</strong><p>Add conditions, allergies, medications, labs, visit summaries, and other records through Add health info so each item can keep its source and review history.</p></div>
+        <Link className="button ghost" to="/add"><PlusCircle size={16}/> Add health info</Link>
       </div>
 
       {error&&<div className="profile-error">{error}</div>}
