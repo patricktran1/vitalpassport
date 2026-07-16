@@ -4,6 +4,8 @@
 .source-security-strip strong,.source-security-strip span { display:block; }
 .source-security-strip strong { font-size:12px; }
 .source-security-strip span { margin-top:4px; color:#6f827a; font-size:10px; line-height:1.5; }
+.source-persistence-note { display:flex; align-items:flex-start; gap:9px; max-width:690px; margin:14px auto 4px; padding:12px 14px; border:1px solid #d6e6dc; border-radius:12px; background:#f2f8f4; color:#4c685e; text-align:left; font-size:10px; line-height:1.5; }
+.source-persistence-note svg { flex:0 0 auto; margin-top:1px; }
 .source-library-state { min-height:280px; display:grid; place-items:center; align-content:center; gap:10px; text-align:center; padding:34px; border:1px dashed #cfdad5; border-radius:20px; background:rgba(255,255,255,.62); color:#61736d; }
 .source-library-state.compact { min-height:170px; }
 .source-library-state h2 { margin:2px 0 0; color:var(--ink); font-size:20px; }
