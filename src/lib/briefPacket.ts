@@ -6,6 +6,7 @@ import {
   sources as demoSources,
   timeline as demoTimeline,
 } from '../data/demo'
+import { calculatePatientAge, type PatientProfile } from './patientProfile'
 import type {
   CareTask,
   ClinicalLabResult,
@@ -18,6 +19,7 @@ import type {
 } from '../types'
 
 interface BuildSharedBriefPacketInput {
+  profile: PatientProfile
   answers: InterviewAnswers
   readiness: number
   openGapCount: number
@@ -32,8 +34,7 @@ interface BuildSharedBriefPacketInput {
 }
 
 function parsePriorities(value: string) {
-  const fallback = 'Could my medication be contributing to the dizziness? Do I need additional testing? What symptoms should make me seek urgent care?'
-  return (value || fallback)
+  return value
     .split(/\n|\?\s+/)
     .map((item) => item.trim())
     .filter(Boolean)
@@ -95,9 +96,7 @@ function confirmedSignalTimeline(): TimelineEvent[] {
 }
 
 export function buildSharedBriefPacket(input: BuildSharedBriefPacketInput): SharedBriefPacket {
-  const timingContext = input.answers.timing ? ` Patient reports the dizziness began ${input.answers.timing.toLowerCase()}.` : ''
-  const positionalContext = input.answers.positional ? ` Standing trigger: ${input.answers.positional.toLowerCase()}.` : ''
-  const selectedTimeline = [...input.timelineEvents.filter((event) => event.date <= '2026-07-18'), ...confirmedSignalTimeline()]
+  const selectedTimeline = [...input.timelineEvents, ...confirmedSignalTimeline()]
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(-10)
   const labs = latestLabs(input.labResults)
@@ -109,20 +108,23 @@ export function buildSharedBriefPacket(input: BuildSharedBriefPacketInput): Shar
   input.reconciliationIssues.forEach((issue) => issue.sources.forEach((source) => sourceIds.add(source.sourceId)))
   input.careTasks.forEach((task) => task.sourceId && sourceIds.add(task.sourceId))
 
+  const latestEvent = selectedTimeline[selectedTimeline.length - 1]
+  const reason = latestEvent?.summary || (input.sources.length ? `${input.sources.length} patient-confirmed ${input.sources.length === 1 ? 'source has' : 'sources have'} been organized for clinical review.` : 'No confirmed health information has been added yet.')
+
   return {
     schemaVersion: 1,
     preparedAt: new Date().toISOString(),
     patient: {
-      name: patient.name,
-      age: patient.age,
-      dob: patient.dob,
-      pronouns: patient.pronouns,
-      conditions: [...patient.conditions],
-      allergies: [...patient.allergies],
+      name: input.profile.name || 'Patient profile incomplete',
+      age: calculatePatientAge(input.profile.dob) || 0,
+      dob: input.profile.dob,
+      pronouns: input.profile.pronouns,
+      conditions: [...input.profile.conditions],
+      allergies: [...input.profile.allergies],
     },
     visit: {
-      label: 'Primary care with Dr. Jordan Kim · July 18, 2026',
-      reason: `Dizziness and fatigue beginning around June 20, with a possible temporal overlap with a metoprolol dose change.${timingContext}${positionalContext}`,
+      label: 'Patient-controlled clinical handoff',
+      reason,
     },
     readiness: {
       percent: input.readiness,
