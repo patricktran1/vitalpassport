@@ -20,19 +20,21 @@ export function WorkspaceHome() {
   if (workspace.isDemo) return <Dashboard />
 
   const hasRecord = vital.uploads.length > 0 || vital.sources.length > 0 || vital.timelineEvents.length > 0
+  const firstName = patientProfile.profile.name.trim().split(/\s+/)[0]
+  const welcomeTitle = firstName ? `Welcome back, ${firstName}.` : 'Welcome to your Vital Passport.'
 
   return <div className="page personal-empty-home">
     <section className="page-heading split-heading">
-      <div><div className="eyebrow">My Vital Passport</div><h1>{patientProfile.profile.name ? `${patientProfile.profile.name}’s health story` : hasRecord ? 'Your health story is taking shape.' : 'Start with a clean slate.'}</h1><p>{auth.user ? `Signed in as ${auth.user.email}. Only information you add or confirm belongs in this personal workspace.` : 'This personal workspace is empty and local to this browser until you sign in.'}</p></div>
+      <div><div className="eyebrow">My Vital Passport</div><h1>{welcomeTitle}</h1><p>{auth.user ? 'Your patient-controlled health record is ready. Add information, review what was extracted, and decide what becomes part of your shared health story.' : 'Build a portable health record from the information you choose to add. Sign in when you are ready to save it across devices.'}</p></div>
       <Link className="button primary" to="/add"><PlusCircle size={16}/> Add health information</Link>
     </section>
 
-    {!patientProfile.profile.name&&<section className="profile-setup-card"><div><strong>Name this Vital Passport</strong><span>Add the patient name, date of birth, pronouns, conditions, and allergies used on the clinician brief.</span></div><Link className="button ghost" to="/profile"><CircleUserRound size={16}/> Set up profile</Link></section>}
+    {!patientProfile.profile.name&&<section className="profile-setup-card"><div><strong>Set up your patient profile</strong><span>Add the patient name, date of birth, photograph, and contact details used on the Passport and clinician handoffs.</span></div><Link className="button ghost" to="/profile"><CircleUserRound size={16}/> Set up profile</Link></section>}
 
     <section className="personal-welcome-card">
-      <div className="eyebrow">Patient-controlled from the first click</div>
-      <h2>{hasRecord ? `${vital.sources.length} source records connected` : 'This Passport begins with no health records.'}</h2>
-      <p>{hasRecord ? `You have ${vital.timelineEvents.length} timeline events, ${inbox.pendingCount} Inbox items awaiting review, and ${checkIns.responses.length} recorded check-ins.` : 'Add a document, medication photo, symptom note, or question when you are ready. New findings enter Health Inbox before they can change the confirmed record.'}</p>
+      <div className="eyebrow">Your health story, under your control</div>
+      <h2>{hasRecord ? `${vital.sources.length} source records connected` : 'Your health story starts here.'}</h2>
+      <p>{hasRecord ? `You have ${vital.timelineEvents.length} timeline events, ${inbox.pendingCount} Inbox items awaiting review, and ${checkIns.responses.length} recorded check-ins.` : 'Add a document, medication photo, symptom note, or question whenever you are ready. New findings enter Health Inbox before they can change the confirmed record.'}</p>
     </section>
 
     <section className="personal-start-grid">
@@ -46,6 +48,6 @@ export function WorkspaceHome() {
       <div className="dashboard-inbox-clear"><ShieldCheck size={18}/><span>Only patient-confirmed information enters the shared health story.</span></div>
     </section>
 
-    <section className="workspace-account-card"><FlaskConical size={18}/><div><strong>A synthetic walkthrough remains available separately</strong><p>Open the account and storage panel to explore the demo. Your personal workspace is saved before switching and restored when you return.</p></div></section>
+    <section className="workspace-account-card"><FlaskConical size={18}/><div><strong>Explore a separate synthetic walkthrough</strong><p>Open the account and storage panel to try the fictional example. Your personal Passport is saved before switching and restored when you return.</p></div></section>
   </div>
 }
