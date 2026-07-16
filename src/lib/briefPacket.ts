@@ -68,10 +68,38 @@ function sourceSubset(allSources: SourceRecord[], sourceIds: Set<string>) {
     }))
 }
 
+function confirmedSignalTimeline(): TimelineEvent[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const snapshot = JSON.parse(window.localStorage.getItem('vital-health-signals-v1') || '{}') as {
+      signals?: Array<{ id: string; title: string; detail: string; detectedAt: string; status: string }>
+    }
+    return (snapshot.signals || [])
+      .filter((signal) => signal.status === 'confirmed' || signal.status === 'edited')
+      .map((signal) => {
+        const date = signal.detectedAt.slice(0, 10)
+        return {
+          id: `confirmed-health-signal-${signal.id}`,
+          date,
+          displayDate: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(`${date}T12:00:00`)),
+          category: 'symptoms' as const,
+          title: `Patient-confirmed trend: ${signal.title}`,
+          summary: `${signal.detail} This pattern was confirmed by the patient after Health Inbox review.`,
+          sourceLabel: 'Structured check-ins · patient confirmed',
+          sourceType: 'patient' as const,
+        }
+      })
+  } catch {
+    return []
+  }
+}
+
 export function buildSharedBriefPacket(input: BuildSharedBriefPacketInput): SharedBriefPacket {
   const timingContext = input.answers.timing ? ` Patient reports the dizziness began ${input.answers.timing.toLowerCase()}.` : ''
   const positionalContext = input.answers.positional ? ` Standing trigger: ${input.answers.positional.toLowerCase()}.` : ''
-  const selectedTimeline = input.timelineEvents.filter((event) => event.date <= '2026-07-18').slice(-8)
+  const selectedTimeline = [...input.timelineEvents.filter((event) => event.date <= '2026-07-18'), ...confirmedSignalTimeline()]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-10)
   const labs = latestLabs(input.labResults)
   const sourceIds = new Set<string>()
 
