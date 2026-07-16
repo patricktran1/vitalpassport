@@ -67,6 +67,7 @@ type HealthSignalsSnapshot = {
     detail: string
     evidence: string[]
     severity: string
+    source?: string
     metric?: string
     detectedAt: string
     status: string
@@ -86,6 +87,38 @@ type HealthSignalsSnapshot = {
     createdAt: string
     metrics: Record<string, string | number>
   }>
+  wearableData?: {
+    provider: string
+    status: string
+    permissions: string[]
+    lastSyncAt: string | null
+    days: Array<{
+      date: string
+      sleepHours: number
+      coreHours: number
+      deepHours: number
+      remHours: number
+      awakeHours: number
+      restingHeartRate: number
+      sleepingHeartRate: number
+      heartRateMin: number
+      heartRateMax: number
+      hrvMs: number
+      steps: number
+      sourceDevice: string
+      sourceApp: string
+      manuallyEntered: boolean
+    }>
+    syncHistory: Array<{
+      completedAt: string
+      categories: string[]
+      sampleCount: number
+      dayCount: number
+      status: string
+      mode: string
+    }>
+    interpretationBoundary: string
+  }
 }
 
 function readHealthInbox() {
@@ -120,6 +153,7 @@ export function buildHealthRecordSnapshot(input: HealthRecordSnapshotInput) {
   const activeMemories = input.memories.filter((memory) => !memory.forgottenAt).slice(0, 40)
   const confirmedSignals = (healthSignals.signals || []).filter((signal) => signal.status === 'confirmed' || signal.status === 'edited')
   const pendingSignals = (healthSignals.signals || []).filter((signal) => signal.status === 'pending' || signal.status === 'not_queued')
+  const wearableDays = healthSignals.wearableData?.days || []
   return {
     patient: {
       name: patient.name,
@@ -139,6 +173,8 @@ export function buildHealthRecordSnapshot(input: HealthRecordSnapshotInput) {
       structured_check_in_count: healthSignals.recentResponses?.length || 0,
       pending_health_signal_count: pendingSignals.length,
       confirmed_health_signal_count: confirmedSignals.length,
+      wearable_connection_status: healthSignals.wearableData?.status || 'disconnected',
+      wearable_day_count: wearableDays.length,
     },
     patient_controlled_memory: activeMemories.map((memory) => ({
       id: memory.id,
@@ -158,6 +194,23 @@ export function buildHealthRecordSnapshot(input: HealthRecordSnapshotInput) {
       thirty_day: healthSignals.trends?.['30d'] || [],
       recent_responses: (healthSignals.recentResponses || []).slice(0, 20),
       interpretation_boundary: 'Scores are patient reported. Trends describe direction only and do not diagnose a condition or establish causation.',
+    },
+    wearable_data: healthSignals.wearableData ? {
+      provider: healthSignals.wearableData.provider,
+      mode: 'synthetic_demo',
+      connection_status: healthSignals.wearableData.status,
+      permissions: healthSignals.wearableData.permissions,
+      last_sync_at: healthSignals.wearableData.lastSyncAt,
+      daily_summaries: wearableDays.slice(-30),
+      recent_sync_receipts: healthSignals.wearableData.syncHistory.slice(0, 5),
+      interpretation_boundary: healthSignals.wearableData.interpretationBoundary,
+    } : {
+      provider: 'Apple Health demo',
+      mode: 'synthetic_demo',
+      connection_status: 'disconnected',
+      permissions: [],
+      daily_summaries: [],
+      interpretation_boundary: 'No wearable demo data is connected.',
     },
     health_signals: {
       pending_review: pendingSignals,
