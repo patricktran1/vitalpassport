@@ -179,7 +179,7 @@ function seedResponses(): CheckInResponse[] {
     id: `demo-checkin-${daysAgo}`,
     scheduleId: 'checkin-daily-wellbeing',
     scheduleTitle: 'Daily wellbeing check-in',
-    focus: 'general',
+    focus: 'general' as const,
     prompt: 'How are you feeling today? Is anything better, worse, or different?',
     response,
     metrics: { ...metrics, medicationExperience },
