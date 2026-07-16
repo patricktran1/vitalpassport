@@ -32,6 +32,7 @@ export interface PatientCloudBundle {
   updatedAt: string
   coreRecord: PatientRecordSnapshot
   browserState: {
+    complete: boolean
     local: Record<string, string>
     session: Record<string, string>
   }
@@ -47,8 +48,9 @@ function captureKeys(storage: Storage, keys: readonly string[]) {
 
 export function captureCloudBundle(coreRecord: PatientRecordSnapshot): PatientCloudBundle {
   const browserState = typeof window === 'undefined'
-    ? { local: {}, session: {} }
+    ? { complete: true, local: {}, session: {} }
     : {
+        complete: true,
         local: captureKeys(window.localStorage, syncedLocalStorageKeys),
         session: captureKeys(window.sessionStorage, syncedSessionStorageKeys),
       }
@@ -80,29 +82,38 @@ export function isPatientCloudBundle(value: unknown): value is PatientCloudBundl
 }
 
 export function normalizeCloudRecord(value: unknown): PatientCloudBundle | null {
-  if (isPatientCloudBundle(value)) return value
+  if (isPatientCloudBundle(value)) {
+    return {
+      ...value,
+      browserState: {
+        complete: value.browserState.complete !== false,
+        local: value.browserState.local,
+        session: value.browserState.session,
+      },
+    }
+  }
   if (isPatientRecordSnapshot(value)) {
     return {
       schemaVersion: CLOUD_BUNDLE_SCHEMA_VERSION,
       updatedAt: value.updatedAt,
       coreRecord: value,
-      browserState: { local: {}, session: {} },
+      browserState: { complete: false, local: {}, session: {} },
     }
   }
   return null
 }
 
-function restoreKeys(storage: Storage, values: Record<string, string>, allowedKeys: readonly string[]) {
+function restoreKeys(storage: Storage, values: Record<string, string>, allowedKeys: readonly string[], removeMissing: boolean) {
   allowedKeys.forEach((key) => {
     const value = values[key]
     if (typeof value === 'string') storage.setItem(key, value)
-    else storage.removeItem(key)
+    else if (removeMissing) storage.removeItem(key)
   })
 }
 
 export function restoreCloudBundle(bundle: PatientCloudBundle) {
   if (typeof window === 'undefined') return
   writeSnapshotToSession(bundle.coreRecord)
-  restoreKeys(window.localStorage, bundle.browserState.local, syncedLocalStorageKeys)
-  restoreKeys(window.sessionStorage, bundle.browserState.session, syncedSessionStorageKeys)
+  restoreKeys(window.localStorage, bundle.browserState.local, syncedLocalStorageKeys, bundle.browserState.complete)
+  restoreKeys(window.sessionStorage, bundle.browserState.session, syncedSessionStorageKeys, bundle.browserState.complete)
 }
