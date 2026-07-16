@@ -1,0 +1,20 @@
+.source-identity-check { margin-top:14px; padding:15px; border:1px solid #d7e3dc; border-radius:15px; background:#f4f8f5; color:#466458; text-align:left; }
+.source-identity-check.mismatch { border-color:#efc3b5; background:#fff2ed; color:#7d493f; }
+.source-identity-check.needs_review { border-color:#ead7a8; background:#fff8e9; color:#755e32; }
+.source-identity-heading { display:flex; gap:10px; align-items:flex-start; }
+.source-identity-heading svg { flex:0 0 auto; margin-top:1px; }
+.source-identity-heading strong,.source-identity-heading p { display:block; }
+.source-identity-heading strong { font-size:12px; }
+.source-identity-heading p { margin:4px 0 0; font-size:10.5px; line-height:1.5; color:inherit; opacity:.82; }
+.source-identity-check dl { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:13px 0 0; }
+.source-identity-check dl>div { padding:9px 10px; border-radius:10px; background:rgba(255,255,255,.68); }
+.source-identity-check dt { color:inherit; opacity:.65; font-size:8px; font-weight:900; text-transform:uppercase; letter-spacing:.07em; }
+.source-identity-check dd { margin:4px 0 0; color:var(--ink); font-size:10.5px; font-weight:800; overflow-wrap:anywhere; }
+.identity-acknowledgement { display:flex; gap:10px; align-items:flex-start; margin-top:12px; padding:11px; border:1px solid rgba(119,78,65,.2); border-radius:11px; background:rgba(255,255,255,.72); cursor:pointer; }
+.identity-acknowledgement input { width:17px; height:17px; margin:1px 0 0; accent-color:var(--ink); flex:0 0 auto; }
+.identity-acknowledgement strong,.identity-acknowledgement small { display:block; }
+.identity-acknowledgement strong { color:var(--ink); font-size:10.5px; }
+.identity-acknowledgement small { margin-top:3px; color:var(--muted); font-size:9px; line-height:1.45; }
+.identity-discard-button { margin-top:10px; border:0; padding:0; background:transparent; color:#985447; font-size:9.5px; font-weight:850; cursor:pointer; }
+.identity-discard-button:hover { text-decoration:underline; }
+@media (max-width:700px) { .source-identity-check dl { grid-template-columns:1fr; } }
