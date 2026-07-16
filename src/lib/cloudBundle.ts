@@ -7,10 +7,12 @@ export const syncedLocalStorageKeys = [
   'vital-copilot-memory-v1',
   'vital-check-ins-v1',
   'vital-check-in-responses-v1',
+  'vital-check-in-responses-v2',
   'vital-check-in-mock-deliveries-v1',
   'vital-check-in-mock-contact-v1',
   'vital-health-signals-v1',
   'vital-apple-health-demo-v1',
+  'vital-personal-sandbox-from-demo-v1',
 ] as const
 
 export const syncedSessionStorageKeys = [
