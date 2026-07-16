@@ -5,7 +5,6 @@ import { AppleHealthDemo } from './pages/AppleHealthDemo'
 import { Brief } from './pages/Brief'
 import { CheckIns } from './pages/CheckIns'
 import { Copilot } from './pages/Copilot'
-import { Dashboard } from './pages/Dashboard'
 import { HealthInbox } from './pages/HealthInbox'
 import { HealthSignals } from './pages/HealthSignals'
 import { Memory } from './pages/Memory'
@@ -15,6 +14,7 @@ import { Prepare } from './pages/Prepare'
 import { SharedBrief } from './pages/SharedBrief'
 import { Timeline } from './pages/Timeline'
 import { Transfer } from './pages/Transfer'
+import { WorkspaceHome } from './pages/WorkspaceHome'
 
 export default function App() {
   return (
@@ -22,7 +22,7 @@ export default function App() {
       <Route path="s/:token" element={<SharedBrief />} />
       <Route path="openemr/callback" element={<OpenEmrCallback />} />
       <Route element={<Layout />}>
-        <Route index element={<Dashboard />} />
+        <Route index element={<WorkspaceHome />} />
         <Route path="copilot" element={<Copilot />} />
         <Route path="memory" element={<Memory />} />
         <Route path="inbox" element={<HealthInbox />} />
