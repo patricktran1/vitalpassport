@@ -7,6 +7,7 @@ interface AuthContextValue {
   user: User | null
   loading: boolean
   sendMagicLink: (email: string) => Promise<void>
+  signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -51,6 +52,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.signInWithOtp({
         email: cleanEmail,
         options: { emailRedirectTo: window.location.origin },
+      })
+      if (error) throw error
+    },
+    signInWithGoogle: async () => {
+      if (!supabase) throw new Error('Cloud accounts are not configured yet.')
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin },
       })
       if (error) throw error
     },
