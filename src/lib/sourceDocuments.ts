@@ -1,4 +1,5 @@
 import type { HealthExtraction, HealthItemType } from '../types'
+import { routeHealthExtraction } from './extractionRouting'
 import { supabase } from './supabase'
 
 export const SOURCE_DOCUMENT_BUCKET = 'patient-sources'
@@ -128,9 +129,11 @@ export async function createSourceDocument(input: CreateSourceDocumentInput): Pr
   if (!input.file && !manualText) throw new Error('Add a file or source text before saving.')
   if (input.file && input.file.size > MAX_SOURCE_FILE_BYTES) throw new Error('Source files must be 25 MB or smaller.')
 
+  const routed = routeHealthExtraction(input.extraction, input.itemType, input.file?.name.replace(/\.[^.]+$/, ''))
+  const extraction = routed.extraction
   const id = randomId()
   const sourceKind: SourceDocumentKind = input.file ? 'file' : 'manual_text'
-  const originalFilename = input.file?.name || `${safeFilename(input.extraction.title)}.txt`
+  const originalFilename = input.file?.name || `${safeFilename(extraction.title)}.txt`
   const mimeType = input.file?.type || 'text/plain'
   const sourceBlob = input.file || new Blob([manualText], { type: mimeType })
   const checksum = await sha256Hex(sourceBlob)
@@ -154,19 +157,19 @@ export async function createSourceDocument(input: CreateSourceDocumentInput): Pr
     mime_type: mimeType,
     size_bytes: sourceBlob.size,
     sha256: checksum,
-    item_type: input.itemType,
+    item_type: routed.type,
     upload_item_id: input.uploadItemId,
     source_record_id: input.sourceRecordId,
-    title: input.extraction.title,
-    summary: input.extraction.summary,
-    facility: input.extraction.facility || '',
-    event_date: input.extraction.event_date || '',
+    title: extraction.title,
+    summary: extraction.summary,
+    facility: extraction.facility || '',
+    event_date: extraction.event_date || '',
     source_text: sourceKind === 'manual_text' ? manualText : null,
     extraction_status: 'processed',
-    extraction_model: input.extraction.model || (input.extraction.mode === 'demo' ? 'Synthetic demo' : 'Unknown model'),
-    extraction: input.extraction,
-    page_count: input.extraction.page_count || null,
-    selected_pages: input.extraction.source_pages || [],
+    extraction_model: extraction.model || (extraction.mode === 'demo' ? 'Synthetic demo' : 'Unknown model'),
+    extraction,
+    page_count: extraction.page_count || null,
+    selected_pages: extraction.source_pages || [],
   }).select(selectedColumns).single()
 
   if (error) {

@@ -1,4 +1,5 @@
 import type { HealthExtraction, HealthItemType, SourcePatientIdentity } from '../types'
+import { routeHealthExtraction } from './extractionRouting'
 
 const MAX_IMAGE_DIMENSION = 1600
 const JPEG_QUALITY = 0.82
@@ -65,7 +66,7 @@ export async function extractHealthItem(input: ExtractHealthItemInput): Promise<
   if (!response.ok || !payload.extraction) {
     throw new ExtractionError(payload.error || 'Vital Passport could not organize this item.', payload.code)
   }
-  return payload.extraction
+  return routeHealthExtraction(payload.extraction, input.kind, input.fileName?.replace(/\.[^.]+$/, '')).extraction
 }
 
 function normalized(value: string) {
@@ -118,11 +119,12 @@ export function mergeHealthExtractions(
 ): HealthExtraction {
   if (!extractions.length) throw new ExtractionError('No PDF pages were extracted.', 'EMPTY_PDF_EXTRACTION')
   if (extractions.length === 1) {
-    return {
+    const extraction = {
       ...extractions[0],
       source_pages: extractions[0].source_pages || [1],
       page_count: pageCount,
     }
+    return routeHealthExtraction(extraction, 'document', fileName.replace(/\.pdf$/i, '')).extraction
   }
 
   const sourcePages = [...new Set(extractions.flatMap((extraction) => extraction.source_pages || []))].sort((a, b) => a - b)
@@ -133,7 +135,7 @@ export function mergeHealthExtractions(
   const confidences = extractions.map((extraction) => extraction.confidence).filter(Number.isFinite)
   const sourcePatient = mergedSourcePatient(extractions)
 
-  return {
+  const merged: HealthExtraction = {
     document_type: documentType,
     title: extractions.find((extraction) => extraction.title && !/health information/i.test(extraction.title))?.title || titleFromFile || 'PDF health document',
     summary: summaries.join(' ').slice(0, 900) || `${sourcePages.length} selected PDF pages were extracted for patient review.`,
@@ -158,4 +160,6 @@ export function mergeHealthExtractions(
     source_pages: sourcePages,
     page_count: pageCount,
   }
+
+  return routeHealthExtraction(merged, 'document', titleFromFile).extraction
 }

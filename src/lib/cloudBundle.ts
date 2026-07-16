@@ -1,9 +1,11 @@
 import { isPatientRecordSnapshot, writeSnapshotToSession } from './recordStorage'
+import { PATIENT_PROFILE_KEY } from './patientProfile'
 import type { PatientRecordSnapshot } from '../types'
 
 export const CLOUD_BUNDLE_SCHEMA_VERSION = 2 as const
 
 export const syncedLocalStorageKeys = [
+  PATIENT_PROFILE_KEY,
   'vital-copilot-memory-v1',
   'vital-check-ins-v1',
   'vital-check-in-responses-v1',
@@ -20,6 +22,7 @@ export const syncedSessionStorageKeys = [
 ] as const
 
 export const syncedCloudModules = [
+  'Patient profile',
   'Core health record',
   'Health Inbox decisions',
   'Check-in schedules and responses',

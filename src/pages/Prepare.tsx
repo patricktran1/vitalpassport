@@ -1,24 +1,35 @@
 import { ArrowLeft, ArrowRight, Check, CircleCheck, CircleDashed, FileSearch, Info, Sparkles } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { usePatientProfile } from '../context/PatientProfileContext'
 import { useVital } from '../context/VitalContext'
+import { useWorkspace } from '../context/WorkspaceContext'
 
-const questions = [
+const demoQuestions = [
   { key:'timing' as const, title:'Did the dizziness begin before or after the metoprolol dose changed?', reason:'The timing helps your doctor understand whether the two events may be related.', evidence:['Symptom voice note · June 20','Medication history · June 18'], options:['Before the dose changed','After the dose changed','Around the same time','I’m not sure'] },
   { key:'positional' as const, title:'Does the dizziness happen when you stand up?', reason:'This pattern is important context for your clinician and your home blood-pressure readings.', evidence:['Home BP log · July 12','Symptom note · July 10'], options:['Yes, often','Sometimes','No','I’m not sure'] },
-  { key:'dose' as const, title:'Which metoprolol dose are you taking now?', reason:'Your bottle photo and urgent care summary list different instructions.', evidence:['Bottle photo · 50 mg once daily','Urgent-care summary · 25 mg twice daily'], options:['25 mg twice daily','50 mg once daily','I take it differently','I’m not sure'] },
-  { key:'priorities' as const, title:'What are the most important things you want Dr. Kim to answer?', reason:'Your priorities will appear at the top of the clinician brief.', evidence:['Patient-entered questions'], options:[] },
+  { key:'dose' as const, title:'Which metoprolol dose are you taking now?', reason:'The bottle photo and urgent care summary list different instructions.', evidence:['Bottle photo · 50 mg once daily','Urgent-care summary · 25 mg twice daily'], options:['25 mg twice daily','50 mg once daily','I take it differently','I’m not sure'] },
+  { key:'priorities' as const, title:'What are the most important things you want the doctor to answer?', reason:'Your priorities will appear at the top of the clinician brief.', evidence:['Patient-entered questions'], options:[] },
 ]
 
 export function Prepare() {
   const [step,setStep]=useState(0)
-  const { answers,setAnswer,reviewGaps,resolvedCount }=useVital()
+  const workspace=useWorkspace()
+  const { profile }=usePatientProfile()
+  const { answers,setAnswer,reviewGaps,resolvedCount,sources,medicationSummaries,labResults }=useVital()
+  const personalQuestions=useMemo(()=>[
+    { key:'timing' as const, title:'When did the main health concern or change begin?', reason:'A clear timeline helps the clinician place uploaded records and symptoms in context.', evidence:[`${sources.length} confirmed source ${sources.length===1?'record':'records'}`], options:['Today','Within the past week','Within the past month','More than a month ago','I’m not sure'] },
+    { key:'positional' as const, title:'What seems to trigger or change the concern?', reason:'Triggers and patterns help make the visit summary more useful without drawing a diagnosis.', evidence:[`${labResults.length} lab results · ${medicationSummaries.length} medications`], options:['Activity or body position','Food or medication timing','No clear trigger','Other or not sure'] },
+    { key:'dose' as const, title:'Have you reviewed the current medication list?', reason:'Medication reconciliation is safer when the patient explicitly confirms whether the list is current.', evidence:[`${medicationSummaries.length} medication ${medicationSummaries.length===1?'entry':'entries'}`], options:['Yes, it is current','I found something to correct','I do not take medications','I’m not sure'] },
+    { key:'priorities' as const, title:'What are the most important things you want the doctor to answer?', reason:'Your priorities will appear at the top of the clinician brief.', evidence:['Patient-entered questions'], options:[] },
+  ],[sources.length,labResults.length,medicationSummaries.length])
+  const questions=workspace.isDemo?demoQuestions:personalQuestions
   const q=questions[step]
   const current=answers[q.key]
   const done=step===questions.length-1 && Boolean(current)
 
   return <div className="page prepare-page">
-    <section className="page-heading compact"><div className="eyebrow">Visit preparation agent</div><h1>Let’s close the important gaps.</h1><p>Vital Passport compared Maria’s records, identified conflicts and missing context, and built this focused interview.</p></section>
+    <section className="page-heading compact"><div className="eyebrow">Visit preparation agent</div><h1>Let’s close the important gaps.</h1><p>Vital Passport compared {workspace.isDemo?'the synthetic records':profile.name?`${profile.name}’s confirmed records`:'the confirmed personal records'}, identified missing context, and built this focused interview.</p></section>
     <div className="interview-progress"><div><span>Question {step+1} of {questions.length}</span><strong>{resolvedCount} of {questions.length} confirmed</strong></div><div className="progress-track"><span style={{width:`${((step+(current?1:0))/questions.length)*100}%`}}/></div></div>
 
     <div className="interview-layout">
@@ -38,8 +49,8 @@ export function Prepare() {
         <h2>{q.title}</h2>
         <div className="why-note"><Info size={16}/><span>{q.reason}</span></div>
         <div className="evidence-box"><span>Evidence reviewed</span>{q.evidence.map(item=><div key={item}><FileSearch size={14}/>{item}</div>)}</div>
-        {q.options.length>0 ? <div className="answer-options">{q.options.map(option=><button key={option} className={`answer-option ${current===option?'selected':''}`} onClick={()=>setAnswer(q.key,option)}><span>{option}</span>{current===option&&<Check size={18}/>}</button>)}</div> : <textarea className="large-input priority-input" value={current} onChange={e=>setAnswer(q.key,e.target.value)} placeholder="Example: Could my medication be causing this? Do I need more testing? What should make me seek urgent care?" rows={5}/>} 
-        <div className="interview-actions"><button className="button ghost" disabled={step===0} onClick={()=>setStep(s=>s-1)}><ArrowLeft size={17}/> Back</button>{done?<Link to="/brief" className="button primary">View clinician brief <ArrowRight size={17}/></Link>:<button className="button primary" disabled={!current} onClick={()=>setStep(s=>Math.min(questions.length-1,s+1))}>Continue <ArrowRight size={17}/></button>}</div>
+        {q.options.length>0 ? <div className="answer-options">{q.options.map(option=><button key={option} className={`answer-option ${current===option?'selected':''}`} onClick={()=>setAnswer(q.key,option)}><span>{option}</span>{current===option&&<Check size={18}/>}</button>)}</div> : <textarea className="large-input priority-input" value={current} onChange={event=>setAnswer(q.key,event.target.value)} placeholder="Example: What changed? What needs follow-up? What should I bring or ask?" rows={5}/>} 
+        <div className="interview-actions"><button className="button ghost" disabled={step===0} onClick={()=>setStep((currentStep)=>currentStep-1)}><ArrowLeft size={17}/> Back</button>{done?<Link to="/brief" className="button primary">View clinician brief <ArrowRight size={17}/></Link>:<button className="button primary" disabled={!current} onClick={()=>setStep((currentStep)=>Math.min(questions.length-1,currentStep+1))}>Continue <ArrowRight size={17}/></button>}</div>
       </section>
     </div>
     <p className="safety-copy">Vital Passport organizes information and helps you prepare questions. It does not diagnose conditions or recommend medication changes.</p>

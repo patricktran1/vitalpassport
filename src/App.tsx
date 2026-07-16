@@ -12,6 +12,7 @@ import { Memory } from './pages/Memory'
 import { OpenEmr } from './pages/OpenEmr'
 import { OpenEmrCallback } from './pages/OpenEmrCallback'
 import { Prepare } from './pages/Prepare'
+import { Profile } from './pages/Profile'
 import { SharedBrief } from './pages/SharedBrief'
 import { Timeline } from './pages/Timeline'
 import { Transfer } from './pages/Transfer'
@@ -24,6 +25,7 @@ export default function App() {
       <Route path="openemr/callback" element={<OpenEmrCallback />} />
       <Route element={<Layout />}>
         <Route index element={<WorkspaceHome />} />
+        <Route path="profile" element={<Profile />} />
         <Route path="copilot" element={<Copilot />} />
         <Route path="memory" element={<Memory />} />
         <Route path="inbox" element={<HealthInbox />} />

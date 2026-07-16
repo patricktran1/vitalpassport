@@ -1,4 +1,5 @@
 import type { PatientRecordSnapshot } from '../types'
+import { blankPatientProfile, PATIENT_PROFILE_KEY } from './patientProfile'
 
 export type WorkspaceMode = 'personal' | 'demo'
 
@@ -9,6 +10,7 @@ const CLOUD_LOADED_USER_KEY = 'vital-cloud-loaded-user'
 
 export const workspaceLocalKeys = [
   'vital-patient-record-v1',
+  PATIENT_PROFILE_KEY,
   'vital-copilot-memory-v1',
   'vital-check-ins-v1',
   'vital-check-in-responses-v2',
@@ -75,6 +77,7 @@ function clearManagedState() {
 function seedBlankPersonalState() {
   const record = blankPatientRecord()
   window.localStorage.setItem('vital-patient-record-v1', JSON.stringify(record))
+  window.localStorage.setItem(PATIENT_PROFILE_KEY, JSON.stringify(blankPatientProfile))
   window.localStorage.setItem('vital-copilot-memory-v1', '[]')
   window.localStorage.setItem('vital-check-ins-v1', '[]')
   window.localStorage.setItem('vital-check-in-responses-v2', '[]')
