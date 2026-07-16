@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
+import { AppleHealthDemoProvider } from './context/AppleHealthDemoContext'
 import { AuthProvider } from './context/AuthContext'
 import { CheckInProvider } from './context/CheckInContext'
 import { CloudSyncProvider } from './context/CloudSyncContext'
@@ -22,11 +23,13 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <HealthInboxProvider>
             <CopilotMemoryProvider>
               <CheckInProvider>
-                <HealthSignalsProvider>
-                  <CloudSyncProvider>
-                    <App />
-                  </CloudSyncProvider>
-                </HealthSignalsProvider>
+                <AppleHealthDemoProvider>
+                  <HealthSignalsProvider>
+                    <CloudSyncProvider>
+                      <App />
+                    </CloudSyncProvider>
+                  </HealthSignalsProvider>
+                </AppleHealthDemoProvider>
               </CheckInProvider>
             </CopilotMemoryProvider>
           </HealthInboxProvider>
