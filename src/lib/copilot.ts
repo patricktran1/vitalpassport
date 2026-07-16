@@ -59,6 +59,35 @@ type InboxSnapshotFinding = {
   receipt?: { summary: string; changes: string[] }
 }
 
+type HealthSignalsSnapshot = {
+  updatedAt?: string
+  signals?: Array<{
+    id: string
+    title: string
+    detail: string
+    evidence: string[]
+    severity: string
+    metric?: string
+    detectedAt: string
+    status: string
+  }>
+  trends?: Record<string, Array<{
+    key: string
+    label: string
+    current: number | null
+    previous: number | null
+    delta: number
+    direction: string
+    values: Array<{ date: string; value: number }>
+  }>>
+  recentResponses?: Array<{
+    id: string
+    response: string
+    createdAt: string
+    metrics: Record<string, string | number>
+  }>
+}
+
 function readHealthInbox() {
   if (typeof window === 'undefined') return { pending: [] as InboxSnapshotFinding[], recentlyReviewed: [] as InboxSnapshotFinding[] }
   try {
@@ -75,9 +104,22 @@ function readHealthInbox() {
   }
 }
 
+function readHealthSignals(): HealthSignalsSnapshot {
+  if (typeof window === 'undefined') return {}
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem('vital-health-signals-v1') || '{}')
+    return parsed && typeof parsed === 'object' ? parsed as HealthSignalsSnapshot : {}
+  } catch {
+    return {}
+  }
+}
+
 export function buildHealthRecordSnapshot(input: HealthRecordSnapshotInput) {
   const inbox = readHealthInbox()
+  const healthSignals = readHealthSignals()
   const activeMemories = input.memories.filter((memory) => !memory.forgottenAt).slice(0, 40)
+  const confirmedSignals = (healthSignals.signals || []).filter((signal) => signal.status === 'confirmed' || signal.status === 'edited')
+  const pendingSignals = (healthSignals.signals || []).filter((signal) => signal.status === 'pending' || signal.status === 'not_queued')
   return {
     patient: {
       name: patient.name,
@@ -94,6 +136,9 @@ export function buildHealthRecordSnapshot(input: HealthRecordSnapshotInput) {
       pending_health_inbox_count: inbox.pending.length,
       recently_reviewed_health_inbox_count: inbox.recentlyReviewed.length,
       patient_controlled_memory_count: activeMemories.length,
+      structured_check_in_count: healthSignals.recentResponses?.length || 0,
+      pending_health_signal_count: pendingSignals.length,
+      confirmed_health_signal_count: confirmedSignals.length,
     },
     patient_controlled_memory: activeMemories.map((memory) => ({
       id: memory.id,
@@ -107,6 +152,19 @@ export function buildHealthRecordSnapshot(input: HealthRecordSnapshotInput) {
         ? 'Patient-controlled context linked to a source. Verify the source before treating it as a medical fact.'
         : 'Patient-controlled context only. This is not source evidence or a confirmed clinical fact.',
     })),
+    check_in_trends: {
+      updated_at: healthSignals.updatedAt || null,
+      seven_day: healthSignals.trends?.['7d'] || [],
+      thirty_day: healthSignals.trends?.['30d'] || [],
+      recent_responses: (healthSignals.recentResponses || []).slice(0, 20),
+      interpretation_boundary: 'Scores are patient reported. Trends describe direction only and do not diagnose a condition or establish causation.',
+    },
+    health_signals: {
+      pending_review: pendingSignals,
+      patient_confirmed: confirmedSignals,
+      other_reviewed: (healthSignals.signals || []).filter((signal) => !['pending', 'not_queued', 'confirmed', 'edited'].includes(signal.status)),
+      interpretation_boundary: 'Signals come from deterministic local rules. Pending signals are not part of the patient-confirmed record.',
+    },
     health_inbox: {
       pending: inbox.pending.map((finding) => ({
         id: finding.id,
