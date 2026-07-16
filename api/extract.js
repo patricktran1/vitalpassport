@@ -30,6 +30,16 @@ const extractionSchema = {
     summary: { type: 'string' },
     event_date: { type: 'string' },
     facility: { type: 'string' },
+    source_patient: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        name: { type: 'string' },
+        dob: { type: 'string' },
+        medical_record_number: { type: 'string' },
+      },
+      required: ['name', 'dob', 'medical_record_number'],
+    },
     medications: {
       type: 'array',
       items: {
@@ -87,6 +97,7 @@ const extractionSchema = {
     'summary',
     'event_date',
     'facility',
+    'source_patient',
     'medications',
     'lab_results',
     'diagnoses',
@@ -126,6 +137,7 @@ function parseJsonContent(content) {
 }
 
 function normalizeExtraction(raw, model) {
+  const sourcePatient = isObject(raw.source_patient) ? raw.source_patient : {}
   const medications = Array.isArray(raw.medications)
     ? raw.medications
         .filter(isObject)
@@ -172,6 +184,11 @@ function normalizeExtraction(raw, model) {
     summary: cleanString(raw.summary) || 'Health information extracted for patient review.',
     event_date: cleanString(raw.event_date),
     facility: cleanString(raw.facility),
+    source_patient: {
+      name: cleanString(sourcePatient.name),
+      dob: cleanString(sourcePatient.dob),
+      medical_record_number: cleanString(sourcePatient.medical_record_number),
+    },
     medications,
     lab_results: labResults,
     diagnoses: cleanStringArray(raw.diagnoses),
@@ -253,9 +270,7 @@ async function listVisionModels(apiKey) {
     .map((model) => cleanString(model.id))
     .filter(Boolean)
 
-  if (!visionModels.length) {
-    throw new Error('No vision-capable models were found in this Nebius project.')
-  }
+  if (!visionModels.length) throw new Error('No vision-capable models were found in this Nebius project.')
 
   cachedVisionModels = visionModels
   cachedVisionModel = visionModels[0]
@@ -301,9 +316,7 @@ function shouldTryAnotherModel(status, message) {
 }
 
 function friendlyProviderError(status, message, model) {
-  if (status === 401 || status === 403) {
-    return 'Nebius rejected the API key. Check NEBIUS_API_KEY in Vercel and redeploy.'
-  }
+  if (status === 401 || status === 403) return 'Nebius rejected the API key. Check NEBIUS_API_KEY in Vercel and redeploy.'
   if (status === 402) return 'Nebius billing or account credits need attention before extraction can run.'
   if (status === 429) return 'Nebius is rate-limiting requests. Wait briefly and try again.'
   if (status >= 500) return 'Nebius is temporarily unavailable. Try again in a moment.'
@@ -348,6 +361,8 @@ export default async function handler(request, response) {
   const text = cleanString(body.text).slice(0, MAX_TEXT_LENGTH)
   const imageDataUrl = cleanString(body.imageDataUrl)
   const fileName = cleanString(body.fileName).slice(0, 180)
+  const pageNumber = Number(body.pageNumber)
+  const pageCount = Number(body.pageCount)
 
   if (!ALLOWED_KINDS.has(kind)) {
     return response.status(400).json({ error: 'Unsupported health item type.', code: 'INVALID_KIND' })
@@ -371,8 +386,13 @@ export default async function handler(request, response) {
       text: [
         `The patient categorized this item as: ${kind}.`,
         fileName ? `Filename: ${fileName}.` : '',
+        Number.isFinite(pageNumber) && pageNumber > 0 ? `This is page ${pageNumber}${Number.isFinite(pageCount) && pageCount > 0 ? ` of ${pageCount}` : ''}.` : '',
         text ? `Patient-provided text:\n${text}` : '',
         'Extract only facts that are explicitly visible or stated in the supplied source.',
+        'Extract the patient name, date of birth, and medical record number exactly as printed into source_patient.',
+        'Never infer patient identity. Use an empty string for an identifier that is not explicitly visible.',
+        'Do not treat a prescription number, pharmacy RX number, claim number, order number, account number, or member number as a medical record number unless the source explicitly labels it MRN, medical record number, or patient ID.',
+        'Include short exact evidence quotes for every patient identifier that is present.',
         'Do not diagnose, infer causation, recommend treatment, or fill missing facts from medical knowledge.',
         'Use empty strings or empty arrays when information is absent.',
         'Evidence quotes must be short exact snippets from the source.',
@@ -388,12 +408,12 @@ export default async function handler(request, response) {
 
   const baseRequest = {
     temperature: 0.1,
-    max_tokens: 2400,
+    max_tokens: 2800,
     messages: [
       {
         role: 'system',
         content:
-          'You are a conservative medical-record extraction engine. Preserve provenance, uncertainty, and exact source meaning. Never provide medical advice.',
+          'You are a conservative medical-record extraction engine. Preserve provenance, patient identity, uncertainty, and exact source meaning. Never provide medical advice.',
       },
       { role: 'user', content },
     ],

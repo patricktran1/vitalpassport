@@ -59,12 +59,27 @@ export interface ExtractionEvidence {
   page?: number
 }
 
+export interface SourcePatientIdentity {
+  name: string
+  dob: string
+  medical_record_number: string
+}
+
+export interface SourceIdentityReviewReceipt {
+  status: 'not_present' | 'matched_account' | 'patient_confirmed' | 'patient_confirmed_mismatch'
+  source_name: string
+  account_name: string
+  reviewed_at: string
+}
+
 export interface HealthExtraction {
   document_type: 'medication_bottle' | 'lab_report' | 'after_visit_summary' | 'discharge_summary' | 'imaging_report' | 'symptom_note' | 'question' | 'health_photo' | 'other'
   title: string
   summary: string
   event_date: string
   facility: string
+  source_patient?: SourcePatientIdentity
+  identity_review?: SourceIdentityReviewReceipt
   medications: ExtractionMedication[]
   lab_results: ExtractionLabResult[]
   diagnoses: string[]
