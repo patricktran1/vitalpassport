@@ -1,8 +1,10 @@
-import { Activity, ArrowUpFromLine, BellRing, Bot, Brain, CalendarDays, ChevronRight, ClipboardList, FileHeart, FlaskConical, FolderLock, Home, Inbox as InboxIcon, Menu, PlusCircle, RotateCcw, ShieldCheck, Sparkles, UserRound, Watch, X } from 'lucide-react'
+import { Activity, ArrowUpFromLine, BellRing, Bot, Brain, CalendarDays, ChevronRight, ClipboardList, FileHeart, FlaskConical, FolderLock, Home, Inbox as InboxIcon, LoaderCircle, Menu, PlusCircle, RotateCcw, ShieldCheck, Sparkles, UserRound, Watch, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAppleHealthDemo } from '../context/AppleHealthDemoContext'
+import { useAuth } from '../context/AuthContext'
 import { useCheckIns } from '../context/CheckInContext'
+import { useCloudSync } from '../context/CloudSyncContext'
 import { useCopilotMemory } from '../context/CopilotMemoryContext'
 import { useHealthInbox } from '../context/HealthInboxContext'
 import { useHealthSignals } from '../context/HealthSignalsContext'
@@ -16,7 +18,6 @@ import { Logo } from './Logo'
 import { SourceDrawer } from './SourceDrawer'
 
 const navItems = [
-  { to: '/profile', label: 'My profile', icon: UserRound },
   { to: '/add', label: 'Add health info', icon: PlusCircle },
   { to: '/documents', label: 'Private sources', icon: FolderLock },
   { to: '/timeline', label: 'Timeline', icon: CalendarDays },
@@ -29,8 +30,11 @@ export function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [copilotOpen, setCopilotOpen] = useState(false)
   const [promptRequest, setPromptRequest] = useState({ id: 0, prompt: '' })
+  const [resetting, setResetting] = useState(false)
   const location = useLocation()
   const workspace = useWorkspace()
+  const auth = useAuth()
+  const cloudSync = useCloudSync()
   const patientProfile = usePatientProfile()
   const { pendingCount } = useHealthInbox()
   const { dueCount } = useCheckIns()
@@ -53,10 +57,28 @@ export function Layout() {
     return () => window.removeEventListener(COPILOT_DRAWER_EVENT, handleOpen)
   }, [])
 
-  const handleReset = () => {
-    const label = workspace.isDemo ? 'Restore the synthetic demo to its original state?' : 'Reset this local personal workspace to a blank Passport?'
+  const resetUsesCloud = !workspace.isDemo && Boolean(auth.user) && cloudSync.storageMode === 'cloud'
+
+  const handleReset = async () => {
+    const label = workspace.isDemo
+      ? 'Restore the synthetic demo to its original state?'
+      : resetUsesCloud
+        ? 'Permanently reset this Passport everywhere? This deletes the cloud health record, Health Inbox, private source files, share links, and the local copy. Your login remains active.'
+        : 'Reset this local personal workspace to a blank Passport?'
     if (!window.confirm(label)) return
-    workspace.resetCurrent()
+
+    if (workspace.isDemo || !resetUsesCloud) {
+      workspace.resetCurrent()
+      return
+    }
+
+    setResetting(true)
+    try {
+      await cloudSync.resetToBlank()
+    } catch (caught) {
+      setResetting(false)
+      window.alert(caught instanceof Error ? caught.message : 'The Passport could not be reset.')
+    }
   }
 
   return (
@@ -67,9 +89,22 @@ export function Layout() {
           <button className="icon-button mobile-close" onClick={() => setMobileOpen(false)} aria-label="Close menu"><X size={20} /></button>
         </div>
 
+        <NavLink to="/profile" onClick={() => setMobileOpen(false)} className={({ isActive }) => `patient-mini patient-mini-top ${isActive ? 'active' : ''}`}>
+          {patientProfile.profile.photoDataUrl
+            ? <img className="avatar patient-avatar-photo" src={patientProfile.profile.photoDataUrl} alt="Patient profile"/>
+            : <div className="avatar">{patientProfile.initials}</div>}
+          <div>
+            <strong>{patientProfile.profile.name || (workspace.isDemo ? 'Synthetic patient' : 'Set up my profile')}</strong>
+            <span>{workspace.isDemo ? 'Synthetic demonstration' : patientProfile.profile.name ? 'View or edit patient details' : 'Add identity and contact details'}</span>
+          </div>
+        </NavLink>
+
         <nav className="primary-nav" aria-label="Main navigation">
           <NavLink to="/" end onClick={() => setMobileOpen(false)} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <Home size={19}/><span>Health home</span>
+          </NavLink>
+          <NavLink to="/profile" onClick={() => setMobileOpen(false)} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <UserRound size={19}/><span>My profile</span>
           </NavLink>
           <button className={`nav-item copilot-nav-trigger ${copilotOpen ? 'active' : ''}`} onClick={() => openCopilot()} aria-expanded={copilotOpen}>
             <Bot size={19}/><span>Health Copilot</span><Sparkles size={14}/>
@@ -99,9 +134,9 @@ export function Layout() {
 
         <div className="sidebar-account"><AccountPanel /></div>
 
-        <button className="demo-reset" onClick={handleReset}>
-          <RotateCcw size={16} />
-          <span><strong>{workspace.isDemo ? 'Reset synthetic demo' : 'Reset local workspace'}</strong><small>{workspace.isDemo ? 'Return synthetic data to the start' : 'Start a blank personal Passport'}</small></span>
+        <button className="demo-reset" onClick={()=>void handleReset()} disabled={resetting}>
+          {resetting ? <LoaderCircle className="spin" size={16}/> : <RotateCcw size={16} />}
+          <span><strong>{workspace.isDemo ? 'Reset synthetic demo' : resetUsesCloud ? 'Reset cloud Passport' : 'Reset local workspace'}</strong><small>{workspace.isDemo ? 'Return synthetic data to the start' : resetUsesCloud ? 'Delete cloud and local health data' : 'Start a blank personal Passport'}</small></span>
         </button>
 
         <div className="sidebar-trust">
@@ -111,19 +146,11 @@ export function Layout() {
             <span>Your information stays yours.</span>
           </div>
         </div>
-
-        <div className="patient-mini">
-          <div className="avatar">{patientProfile.initials}</div>
-          <div>
-            <strong>{patientProfile.profile.name || (workspace.isDemo ? 'Synthetic patient' : 'My Vital Passport')}</strong>
-            <span>{workspace.isDemo ? 'Synthetic demonstration' : patientProfile.profile.name ? 'Personal health profile' : 'Profile not yet named'}</span>
-          </div>
-        </div>
       </aside>
 
       <main className="main-content">
         {workspace.isDemo&&<div className="demo-mode-banner"><FlaskConical size={17}/><div><strong>Synthetic demo mode</strong><span>You are viewing entirely fictional information. This workspace does not sync to your account automatically.</span></div><button onClick={workspace.startPersonal}>Start my own Passport</button></div>}
-        {!workspace.isDemo&&workspace.isDemoCopy&&<div className="demo-mode-banner personal-sandbox-banner"><FlaskConical size={17}/><div><strong>Synthetic sandbox copied into this workspace</strong><span>Reset to blank before entering your own health information.</span></div><button onClick={handleReset}>Reset to blank</button></div>}
+        {!workspace.isDemo&&workspace.isDemoCopy&&<div className="demo-mode-banner personal-sandbox-banner"><FlaskConical size={17}/><div><strong>Synthetic sandbox copied into this workspace</strong><span>Reset to blank before entering your own health information.</span></div><button onClick={()=>void handleReset()}>Reset to blank</button></div>}
         <header className="mobile-header">
           <button className="icon-button" onClick={() => setMobileOpen(true)} aria-label="Open menu"><Menu size={22} /></button>
           <Logo compact />
