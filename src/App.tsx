@@ -6,6 +6,7 @@ import { CheckIns } from './pages/CheckIns'
 import { Copilot } from './pages/Copilot'
 import { Dashboard } from './pages/Dashboard'
 import { HealthInbox } from './pages/HealthInbox'
+import { HealthSignals } from './pages/HealthSignals'
 import { Memory } from './pages/Memory'
 import { OpenEmr } from './pages/OpenEmr'
 import { OpenEmrCallback } from './pages/OpenEmrCallback'
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="memory" element={<Memory />} />
         <Route path="inbox" element={<HealthInbox />} />
         <Route path="check-ins" element={<CheckIns />} />
+        <Route path="signals" element={<HealthSignals />} />
         <Route path="add" element={<AddHealth />} />
         <Route path="timeline" element={<Timeline />} />
         <Route path="prepare" element={<Prepare />} />
