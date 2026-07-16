@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
+import { FileDropGuard } from './components/FileDropGuard'
 import { AppleHealthDemoProvider } from './context/AppleHealthDemoContext'
 import { AuthProvider } from './context/AuthContext'
 import { CheckInProvider } from './context/CheckInContext'
@@ -53,6 +54,7 @@ function ProductApp() {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
+    <FileDropGuard />
     <ProductApp />
   </React.StrictMode>,
 )

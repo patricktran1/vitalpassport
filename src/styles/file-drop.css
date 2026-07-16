@@ -1,0 +1,78 @@
+.drop-zone {
+  position: relative;
+  isolation: isolate;
+  transition: border-color .16s ease, background .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.drop-zone::before {
+  content: 'DRAG & DROP';
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+  padding: 5px 8px;
+  border: 1px solid #cddbd4;
+  border-radius: 999px;
+  background: rgba(255,255,255,.82);
+  color: #5a7169;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .09em;
+}
+
+.drop-zone:not(.has-file) strong {
+  font-size: 0;
+}
+
+.drop-zone:not(.has-file) strong::after {
+  content: 'Drag a photo or PDF here';
+  font-size: 15px;
+}
+
+.drop-zone:not(.has-file) span {
+  font-size: 0;
+}
+
+.drop-zone:not(.has-file) span::after {
+  content: 'or click to browse · JPG, PNG, WebP, or PDF';
+  font-size: 11px;
+}
+
+.drop-zone.is-dragging {
+  border: 2px solid var(--ink);
+  background: #eaf3ee;
+  box-shadow: 0 16px 34px rgba(35, 70, 58, .16);
+  transform: translateY(-2px) scale(1.005);
+}
+
+.drop-zone.is-dragging::after {
+  content: 'Drop to upload';
+  position: absolute;
+  inset: 9px;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  border: 2px dashed #527064;
+  border-radius: 13px;
+  background: rgba(239, 247, 242, .96);
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: -.01em;
+  pointer-events: none;
+}
+
+.drop-zone.has-file.is-dragging::after {
+  content: 'Drop to replace this file';
+}
+
+.drop-zone.is-dragging > * {
+  opacity: .12;
+}
+
+@media (max-width: 640px) {
+  .drop-zone::before {
+    top: 9px;
+    right: 9px;
+  }
+}
