@@ -7,6 +7,7 @@ import { useWorkspace } from '../context/WorkspaceContext'
 import { ExtractionError, extractHealthItem, imageFileToDataUrl, mergeHealthExtractions } from '../lib/extraction'
 import { MAX_PDF_PAGES_SELECTED, type PdfPreview, renderPdfPagesForAnalysis, renderPdfThumbnails } from '../lib/pdf'
 import { createSourceDocument } from '../lib/sourceDocuments'
+import { accountIdentityName, reviewSourceIdentity } from '../lib/sourceIdentity'
 import type { HealthExtraction, HealthItemType, IngestionSummary } from '../types'
 
 const options: Array<{type: HealthItemType; label: string; help: string; icon: typeof Camera}> = [
@@ -44,6 +45,9 @@ const isPdfFile = (file: File | null) => Boolean(file && (file.type === 'applica
 
 function extractionRows(extraction: HealthExtraction) {
   const rows: Array<[string,string]> = []
+  if (extraction.source_patient?.name) rows.push(['Patient named on source', extraction.source_patient.name])
+  if (extraction.source_patient?.dob) rows.push(['DOB on source', extraction.source_patient.dob])
+  if (extraction.source_patient?.medical_record_number) rows.push(['Medical record number', extraction.source_patient.medical_record_number])
   if (extraction.source_pages?.length) rows.push(['PDF pages analyzed', extraction.source_pages.join(', ') + (extraction.page_count ? ` of ${extraction.page_count}` : '')])
   if (extraction.event_date) rows.push(['Date', extraction.event_date])
   if (extraction.facility) rows.push(['Facility', extraction.facility])
@@ -53,7 +57,7 @@ function extractionRows(extraction: HealthExtraction) {
   extraction.diagnoses.forEach((diagnosis) => rows.push(['Documented diagnosis', diagnosis]))
   extraction.instructions.forEach((instruction) => rows.push(['Instruction', instruction]))
   if (extraction.follow_up) rows.push(['Follow-up', extraction.follow_up])
-  return rows.slice(0, 16)
+  return rows.slice(0, 18)
 }
 
 export function AddHealth() {
@@ -72,16 +76,21 @@ export function AddHealth() {
   const [setupNeeded,setSetupNeeded]=useState(false)
   const [demoLoaded,setDemoLoaded]=useState(false)
   const [sourceSaveMessage,setSourceSaveMessage]=useState('')
+  const [identityAcknowledged,setIdentityAcknowledged]=useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const auth = useAuth()
   const workspace = useWorkspace()
   const { addUpload } = useVital()
+  const accountName = accountIdentityName(auth.user)
+  const identityReview = extraction ? reviewSourceIdentity(extraction.source_patient, accountName) : null
+  const identityBlocked = Boolean(identityReview?.requiresAcknowledgement && !identityAcknowledged)
+  const extractionNeedsAttention = Boolean(extraction?.requires_confirmation || (identityReview && identityReview.status !== 'not_present' && identityReview.status !== 'match'))
 
   const resetFile=()=>{setSelectedFile(null);setPdfPreview(null);setSelectedPdfPages([]);setPdfLoading(false)}
-  const clearWorkspace=()=>{setSelected(null);setExtraction(null);setIngestionSummary(null);resetFile();setTextValue('');setError('');setSetupNeeded(false);setDemoLoaded(false);setProcessingLabel('');setSourceSaveMessage('')}
+  const clearWorkspace=()=>{setSelected(null);setExtraction(null);setIngestionSummary(null);resetFile();setTextValue('');setError('');setSetupNeeded(false);setDemoLoaded(false);setProcessingLabel('');setSourceSaveMessage('');setIdentityAcknowledged(false)}
 
   const chooseFile=async(file:File | null)=>{
-    resetFile();setError('');setDemoLoaded(false);setSourceSaveMessage('')
+    resetFile();setError('');setDemoLoaded(false);setSourceSaveMessage('');setIdentityAcknowledged(false)
     if(!file)return
     setSelectedFile(file)
     if(!isPdfFile(file))return
@@ -107,7 +116,7 @@ export function AddHealth() {
 
   const processItem = async () => {
     if (!selected || (!selectedFile && !textValue.trim())) return
-    setProcessing(true);setError('');setSetupNeeded(false);setSourceSaveMessage('')
+    setProcessing(true);setError('');setSetupNeeded(false);setSourceSaveMessage('');setIdentityAcknowledged(false)
     try {
       let result:HealthExtraction
       if(selectedFile&&isPdfFile(selectedFile)){
@@ -136,22 +145,44 @@ export function AddHealth() {
     } finally { setProcessing(false);setProcessingLabel('') }
   }
 
+  const discardWrongPatientSource = () => {
+    if (!window.confirm('Discard this source because it belongs to a different person? The file and extracted facts will not be saved.')) return
+    setExtraction(null)
+    resetFile()
+    setTextValue('')
+    setError('')
+    setIdentityAcknowledged(false)
+  }
+
   const saveItem = async () => {
     if (!selected || !extraction) return
+    if (identityBlocked) {
+      setError('Resolve the patient identity check before adding this source.')
+      return
+    }
     const uploadId=`upload-${Date.now()}`
     const sourceRecordId=`source-${uploadId}`
+    const reviewedExtraction:HealthExtraction={
+      ...extraction,
+      identity_review:{
+        status:identityReview?.status==='match'?'matched_account':identityReview?.status==='mismatch'?'patient_confirmed_mismatch':identityReview?.status==='needs_review'?'patient_confirmed':'not_present',
+        source_name:identityReview?.sourceName||'',
+        account_name:identityReview?.accountName||'',
+        reviewed_at:new Date().toISOString(),
+      },
+    }
     setSavingItem(true);setError('');setSourceSaveMessage('')
     try {
       if(auth.user&&!workspace.isDemo){
-        const saved=await createSourceDocument({userId:auth.user.id,file:selectedFile,manualText:textValue,itemType:selected,extraction,uploadItemId:uploadId,sourceRecordId})
-        setSourceSaveMessage(saved.sourceKind==='file'?'Original source saved privately with its checksum and extraction provenance.':'Manual source text saved to your private account record with its checksum and extraction provenance.')
+        const saved=await createSourceDocument({userId:auth.user.id,file:selectedFile,manualText:textValue,itemType:selected,extraction:reviewedExtraction,uploadItemId:uploadId,sourceRecordId})
+        setSourceSaveMessage(saved.sourceKind==='file'?'Original source saved privately with its checksum, identity review, and extraction provenance.':'Manual source text saved to your private account record with its checksum, identity review, and extraction provenance.')
       }else if(workspace.isDemo){
         setSourceSaveMessage('Demo source retained only inside Maria’s synthetic workspace. Nothing was uploaded to your account.')
       }else{
         setSourceSaveMessage('Structured facts were saved locally on this device. Sign in before your next upload to preserve the original source across devices.')
       }
-      const summary=addUpload({ id:uploadId, name:extraction.title, type:selected, date:'Today', status:'ready', summary:extraction.summary, extraction })
-      setIngestionSummary(summary);setExtraction(null);resetFile();setTextValue('')
+      const summary=addUpload({ id:uploadId, name:reviewedExtraction.title, type:selected, date:'Today', status:'ready', summary:reviewedExtraction.summary, extraction:reviewedExtraction })
+      setIngestionSummary(summary);setExtraction(null);resetFile();setTextValue('');setIdentityAcknowledged(false)
     }catch(caught){
       setError(caught instanceof Error?caught.message:'The source could not be saved.')
     }finally{setSavingItem(false)}
@@ -160,14 +191,14 @@ export function AddHealth() {
   const inputDisabled=pdfLoading||Boolean(selectedFile&&isPdfFile(selectedFile)&&!selectedPdfPages.length)
 
   return <div className="page">
-    <section className="page-heading"><div className="eyebrow">Nebius + Meta Llama</div><h1>Add health information</h1><p>Upload photographs or multi-page PDFs. Vital Passport extracts the facts, preserves the exact source page, reconciles them against the existing record, and creates the next actions automatically.</p></section>
+    <section className="page-heading"><div className="eyebrow">Nebius + Meta Llama</div><h1>Add health information</h1><p>Upload photographs or multi-page PDFs. Vital Passport extracts source-supported facts, checks whose record is named, preserves the exact source page, and reconciles confirmed information against the existing record.</p></section>
 
     {!selected && <div className="capture-grid">{options.map(({type,label,help,icon:Icon}) => <button className="capture-card" key={type} onClick={() => setSelected(type)}><span className="capture-icon"><Icon size={23}/></span><span><strong>{label}</strong><small>{help}</small></span><Plus size={19}/></button>)}</div>}
 
     {selected && <section className="card capture-workspace">
       <div className="card-heading"><div><div className="eyebrow">New item</div><h2>{options.find(o=>o.type===selected)?.label}</h2></div><button className="icon-button" onClick={clearWorkspace}><X size={20}/></button></div>
 
-      {ingestionSummary&&<div className="ingestion-success"><div className="success-mark"><Database size={23}/></div><div className="eyebrow">Health story updated</div><h2>The source was structured and reconciled.</h2><p>Vital Passport preserved the source metadata, added the clinical objects, compared them with the existing record, and updated the clinician brief.</p>{sourceSaveMessage&&<div className="source-persistence-note"><ShieldCheck size={17}/><span>{sourceSaveMessage}</span></div>}<div className="ingestion-metrics"><div><Pill size={18}/><strong>{ingestionSummary.medicationsAdded}</strong><span>medications added</span></div><div><TestTube2 size={18}/><strong>{ingestionSummary.labsAdded}</strong><span>lab results added</span></div><div className={ingestionSummary.conflictsFound?'attention':''}><GitCompareArrows size={18}/><strong>{ingestionSummary.conflictsFound}</strong><span>conflicts found</span></div><div><ListChecks size={18}/><strong>{ingestionSummary.tasksCreated}</strong><span>tasks created</span></div></div>{ingestionSummary.conflictsFound>0&&<div className="reconciliation-callout"><TriangleAlert size={18}/><span>A new discrepancy needs patient confirmation before the clinician brief is fully reconciled.</span></div>}<div className="button-row"><button className="button ghost" onClick={()=>{setIngestionSummary(null);setSourceSaveMessage('')}}>Add another item</button>{auth.user&&!workspace.isDemo&&<Link className="button ghost" to="/documents">Open private sources</Link>}<Link className="button primary" to="/">Open reconciliation center <ArrowRight size={16}/></Link></div></div>}
+      {ingestionSummary&&<div className="ingestion-success"><div className="success-mark"><Database size={23}/></div><div className="eyebrow">Health story updated</div><h2>The source was identified, structured, and reconciled.</h2><p>Vital Passport preserved the source metadata and identity-review receipt, added the clinical objects, compared them with the existing record, and updated the clinician brief.</p>{sourceSaveMessage&&<div className="source-persistence-note"><ShieldCheck size={17}/><span>{sourceSaveMessage}</span></div>}<div className="ingestion-metrics"><div><Pill size={18}/><strong>{ingestionSummary.medicationsAdded}</strong><span>medications added</span></div><div><TestTube2 size={18}/><strong>{ingestionSummary.labsAdded}</strong><span>lab results added</span></div><div className={ingestionSummary.conflictsFound?'attention':''}><GitCompareArrows size={18}/><strong>{ingestionSummary.conflictsFound}</strong><span>conflicts found</span></div><div><ListChecks size={18}/><strong>{ingestionSummary.tasksCreated}</strong><span>tasks created</span></div></div>{ingestionSummary.conflictsFound>0&&<div className="reconciliation-callout"><TriangleAlert size={18}/><span>A new discrepancy needs patient confirmation before the clinician brief is fully reconciled.</span></div>}<div className="button-row"><button className="button ghost" onClick={()=>{setIngestionSummary(null);setSourceSaveMessage('')}}>Add another item</button>{auth.user&&!workspace.isDemo&&<Link className="button ghost" to="/documents">Open private sources</Link>}<Link className="button primary" to="/">Open reconciliation center <ArrowRight size={16}/></Link></div></div>}
 
       {!processing && !extraction && !ingestionSummary && <>
         {filePreferred.includes(selected)&&<><button className={`drop-zone ${selectedFile?'has-file':''}`} onClick={()=>fileRef.current?.click()}><UploadCloud size={34}/><strong>{selectedFile?.name || 'Choose a photo or PDF'}</strong><span>{pdfLoading?'Preparing page previews…':'JPG, PNG, WebP, or PDF · files are prepared in your browser'}</span></button><input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.pdf" hidden onChange={(event)=>void chooseFile(event.target.files?.[0]||null)}/>
@@ -179,11 +210,15 @@ export function AddHealth() {
         <button className="button primary full" disabled={(!selectedFile&&!textValue.trim())||inputDisabled} onClick={processItem}><Sparkles size={17}/> {selectedFile&&isPdfFile(selectedFile)?`Extract ${selectedPdfPages.length} selected ${selectedPdfPages.length===1?'page':'pages'}`:'Extract with Llama'}</button>
       </>}
 
-      {processing && <div className="processing-state"><div className="processing-orbit"><Sparkles size={24}/></div><h3>{processingLabel||'Reading and reconciling the source'}</h3><p>Each PDF page is analyzed separately, then merged without losing the page attached to each fact.</p><div className="processing-lines"><span/><span/><span/></div></div>}
+      {processing && <div className="processing-state"><div className="processing-orbit"><Sparkles size={24}/></div><h3>{processingLabel||'Reading and reconciling the source'}</h3><p>Vital Passport extracts the patient identity and clinical facts separately, then keeps the source page attached to every finding.</p><div className="processing-lines"><span/><span/><span/></div></div>}
 
-      {extraction && <div className="extraction-result live-result"><div className={`success-mark ${extraction.requires_confirmation?'attention':''}`}>{extraction.requires_confirmation?<TriangleAlert size={22}/>:<CheckCircle2 size={22}/>}</div><div className="extraction-mode-row"><span className={`mode-pill ${extraction.mode==='demo'?'demo':''}`}><Sparkles size={13}/>{extraction.mode==='demo'?'Synthetic fallback':'Live Nebius extraction'}</span><span>{Math.round(extraction.confidence*100)}% overall confidence</span>{extraction.source_pages?.length?<span>{extraction.source_pages.length} PDF {extraction.source_pages.length===1?'page':'pages'} analyzed</span>:null}</div>{setupNeeded&&<div className="setup-banner"><ShieldCheck size={17}/><span>This preview used synthetic fallback data. Add the Nebius key in Vercel to activate live extraction.</span></div>}<div className="eyebrow">Patient review required</div><h2>{extraction.title}</h2><p>{extraction.summary}</p><div className="extracted-fields">{extractionRows(extraction).map(([label,value],index)=><div key={`${label}-${index}`}><span>{label}</span><strong>{value}</strong></div>)}</div>{extraction.evidence.length>0&&<div className="evidence-panel"><div className="evidence-heading"><FileText size={16}/><strong>Source evidence</strong><span>Exact quotation and PDF page retained</span></div>{extraction.evidence.slice(0,10).map((item,index)=><div className="evidence-row" key={`${item.field}-${index}`}><div><span>{item.field}</span><strong>{item.value}</strong><blockquote>“{item.quote}”</blockquote></div><small>{item.page?`Page ${item.page} · `:''}{Math.round(item.confidence*100)}%</small></div>)}</div>}{extraction.warnings.length>0&&<div className="warning-list">{extraction.warnings.map(warning=><div key={warning}><TriangleAlert size={15}/><span>{warning}</span></div>)}</div>}<div className={`confirmation-state ${extraction.requires_confirmation?'attention':''}`}><ShieldCheck size={18}/><div><strong>{extraction.requires_confirmation?'Confirm before adding':'Ready to add'}</strong><span>{auth.user&&!workspace.isDemo?'Confirmation will first save the original source privately, then insert the extracted facts into your structured record.':extraction.requires_confirmation?'The AI found information that is uncertain, conflicting, or clinically important to verify.':'The extracted facts are source-supported. Confirmation will insert them into the structured patient record.'}</span></div></div>{error&&<div className="extraction-error"><TriangleAlert size={18}/><div><strong>Source could not be saved</strong><span>{error}</span></div></div>}<div className="button-row"><button className="button ghost" onClick={()=>{setExtraction(null);setError('')}} disabled={savingItem}>Change input</button><button className="button primary" onClick={()=>void saveItem()} disabled={savingItem}>{savingItem?<><LoaderCircle className="spin" size={16}/> Saving private source…</>:<>Confirm, reconcile, and add</>}</button></div></div>}
+      {extraction && identityReview && <div className="extraction-result live-result"><div className={`success-mark ${extractionNeedsAttention?'attention':''}`}>{extractionNeedsAttention?<TriangleAlert size={22}/>:<CheckCircle2 size={22}/>}</div><div className="extraction-mode-row"><span className={`mode-pill ${extraction.mode==='demo'?'demo':''}`}><Sparkles size={13}/>{extraction.mode==='demo'?'Synthetic fallback':'Live Nebius extraction'}</span><span>{Math.round(extraction.confidence*100)}% model-reported confidence</span>{extraction.source_pages?.length?<span>{extraction.source_pages.length} PDF {extraction.source_pages.length===1?'page':'pages'} analyzed</span>:null}</div>{setupNeeded&&<div className="setup-banner"><ShieldCheck size={17}/><span>This preview used synthetic fallback data. Add the Nebius key in Vercel to activate live extraction.</span></div>}<div className="eyebrow">Patient review required</div><h2>{extraction.title}</h2><p>{extraction.summary}</p><div className="extracted-fields">{extractionRows(extraction).map(([label,value],index)=><div key={`${label}-${index}`}><span>{label}</span><strong>{value}</strong></div>)}</div>
+
+        {identityReview.status!=='not_present'&&<section className={`source-identity-check ${identityReview.status}`}><div className="source-identity-heading">{identityReview.status==='mismatch'?<TriangleAlert size={20}/>:<ShieldCheck size={20}/>}<div><strong>{identityReview.status==='match'?'Patient name agrees with the account':identityReview.status==='mismatch'?'Patient name may not match this account':'Verify whose source this is'}</strong><p>{identityReview.status==='match'?`The source names ${identityReview.sourceName}, which agrees with the signed-in account name.`:identityReview.status==='mismatch'?`The source names ${identityReview.sourceName}, while the signed-in account is associated with ${identityReview.accountName}. No clinical facts will be added until you resolve this.`:'A patient identifier is visible on the source, but Vital Passport does not have a verified account name to compare it with.'}</p></div></div><dl>{identityReview.sourceName&&<div><dt>Name on source</dt><dd>{identityReview.sourceName}</dd></div>}{identityReview.sourceDob&&<div><dt>DOB on source</dt><dd>{identityReview.sourceDob}</dd></div>}{identityReview.sourceMedicalRecordNumber&&<div><dt>MRN / patient ID</dt><dd>{identityReview.sourceMedicalRecordNumber}</dd></div>}{identityReview.accountName&&<div><dt>Signed-in account name</dt><dd>{identityReview.accountName}</dd></div>}</dl>{identityReview.requiresAcknowledgement&&<><label className="identity-acknowledgement"><input type="checkbox" checked={identityAcknowledged} onChange={event=>{setIdentityAcknowledged(event.target.checked);setError('')}}/><span><strong>I verified this source belongs in this Vital Passport</strong><small>Use this only when the name difference is expected, such as a legal-name change, alias, caregiver workflow, or test document.</small></span></label><button className="identity-discard-button" onClick={discardWrongPatientSource}>This belongs to someone else · discard it</button></>}</section>}
+
+        {extraction.evidence.length>0&&<div className="evidence-panel"><div className="evidence-heading"><FileText size={16}/><strong>Source evidence</strong><span>Exact quotation and PDF page retained</span></div>{extraction.evidence.slice(0,12).map((item,index)=><div className="evidence-row" key={`${item.field}-${index}`}><div><span>{item.field}</span><strong>{item.value}</strong><blockquote>“{item.quote}”</blockquote></div><small>{item.page?`Page ${item.page} · `:''}{Math.round(item.confidence*100)}% model confidence</small></div>)}</div>}{extraction.warnings.length>0&&<div className="warning-list">{extraction.warnings.map(warning=><div key={warning}><TriangleAlert size={15}/><span>{warning}</span></div>)}</div>}<div className={`confirmation-state ${extractionNeedsAttention?'attention':''}`}><ShieldCheck size={18}/><div><strong>{identityBlocked?'Resolve patient identity first':extraction.requires_confirmation?'Confirm before adding':'Ready to add'}</strong><span>{identityBlocked?'The source remains unsaved and no structured facts will enter the record until the identity check is resolved.':auth.user&&!workspace.isDemo?'Confirmation will first save the original source and identity-review receipt privately, then insert the extracted facts into your structured record.':extraction.requires_confirmation?'The AI found information that is uncertain, conflicting, or clinically important to verify.':'The extracted facts are source-supported. Confirmation will insert them into the structured patient record.'}</span></div></div>{error&&<div className="extraction-error"><TriangleAlert size={18}/><div><strong>Source could not be saved</strong><span>{error}</span></div></div>}<div className="button-row"><button className="button ghost" onClick={()=>{setExtraction(null);setError('');setIdentityAcknowledged(false)}} disabled={savingItem}>Change input</button><button className="button primary" onClick={()=>void saveItem()} disabled={savingItem||identityBlocked}>{savingItem?<><LoaderCircle className="spin" size={16}/> Saving private source…</>:identityBlocked?<>Resolve identity to continue</>:<>Confirm, reconcile, and add</>}</button></div></div>}
     </section>}
 
-    <div className="trust-strip"><ShieldCheck size={18}/><span>PDF pages render inside the browser. Only the pages you select are sent for extraction. Signed-in personal users retain the complete original source privately, while each fact keeps its page-level provenance.</span></div>
+    <div className="trust-strip"><ShieldCheck size={18}/><span>Patient identity is extracted as source evidence, then compared by deterministic Vital Passport rules. Model confidence never overrides an unresolved identity mismatch.</span></div>
   </div>
 }
