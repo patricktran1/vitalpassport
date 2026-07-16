@@ -1,7 +1,8 @@
-import { Activity, ArrowUpFromLine, BellRing, Bot, Brain, CalendarDays, ChevronRight, ClipboardList, FileHeart, Home, Inbox as InboxIcon, Menu, PlusCircle, RotateCcw, ShieldCheck, Sparkles, X } from 'lucide-react'
+import { Activity, ArrowUpFromLine, BellRing, Bot, Brain, CalendarDays, ChevronRight, ClipboardList, FileHeart, Home, Inbox as InboxIcon, Menu, PlusCircle, RotateCcw, ShieldCheck, Sparkles, Watch, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { patient } from '../data/demo'
+import { useAppleHealthDemo } from '../context/AppleHealthDemoContext'
 import { useCheckIns } from '../context/CheckInContext'
 import { useCopilotMemory } from '../context/CopilotMemoryContext'
 import { useHealthInbox } from '../context/HealthInboxContext'
@@ -34,6 +35,7 @@ export function Layout() {
   const { dueCount, resetCheckIns } = useCheckIns()
   const { activeMemories, resetMemory } = useCopilotMemory()
   const { pendingSignalCount } = useHealthSignals()
+  const { status: appleHealthStatus, resetAppleHealthDemo } = useAppleHealthDemo()
 
   const openCopilot = (prompt = '') => {
     setPromptRequest({ id: Date.now(), prompt })
@@ -55,6 +57,7 @@ export function Layout() {
     resetInbox()
     resetCheckIns()
     resetMemory()
+    resetAppleHealthDemo()
     setMobileOpen(false)
     setCopilotOpen(false)
     navigate('/')
@@ -86,6 +89,9 @@ export function Layout() {
           </NavLink>
           <NavLink to="/signals" onClick={() => setMobileOpen(false)} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
             <Activity size={19}/><span>Health signals</span>{pendingSignalCount > 0 && <small className="nav-signals-badge">{pendingSignalCount}</small>}
+          </NavLink>
+          <NavLink to="/apple-health" onClick={() => setMobileOpen(false)} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+            <Watch size={19}/><span>Apple Health demo</span>{appleHealthStatus === 'connected' && <small className="nav-health-badge">On</small>}
           </NavLink>
           {navItems.slice(1).map(({ to, label, icon: Icon }) => (
             <NavLink key={to} to={to} onClick={() => setMobileOpen(false)} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>

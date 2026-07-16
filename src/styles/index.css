@@ -9,6 +9,8 @@
 @import './memory.css';
 @import './health-signals.css';
 @import './health-signals-integrations.css';
+@import './apple-health.css';
+@import './apple-health-signals.css';
 @import './account.css';
 @import './sharing.css';
 @import './transfer.css';

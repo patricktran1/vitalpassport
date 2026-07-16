@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react'
+import { useAppleHealthDemo, type AppleHealthDay, type AppleHealthCategory } from './AppleHealthDemoContext'
 import { useCheckIns, type CheckInMetricKey, type CheckInResponse, type CheckInSchedule } from './CheckInContext'
 import { useHealthInbox, type HealthInboxStatus } from './HealthInboxContext'
 import { useVital } from './VitalContext'
@@ -7,6 +8,8 @@ import type { HealthExtraction, TimelineEvent, UploadItem } from '../types'
 export type SignalSeverity = 'watch' | 'attention'
 export type TrendDirection = 'improving' | 'stable' | 'worsening' | 'insufficient'
 export type TrendWindow = '7d' | '30d'
+export type HealthSignalSource = 'check_in' | 'apple_health_demo'
+export type HealthSignalMetric = CheckInMetricKey | 'sleep_duration' | 'resting_heart_rate'
 
 export interface MetricTrend {
   key: CheckInMetricKey
@@ -25,7 +28,8 @@ export interface HealthSignal {
   detail: string
   evidence: string[]
   severity: SignalSeverity
-  metric?: CheckInMetricKey
+  source?: HealthSignalSource
+  metric?: HealthSignalMetric
   detectedAt: string
   status: HealthInboxStatus | 'not_queued'
   findingId: string
@@ -112,6 +116,7 @@ function detectSignals(responses: CheckInResponse[], schedules: CheckInSchedule[
       detail: `Sleep moved from ${lastFour[0].metrics.sleep}/10 to ${lastFour[3].metrics.sleep}/10 across four recorded check-ins. This describes the patient-reported pattern without identifying a cause.`,
       evidence: lastFour.map((response) => `${new Date(response.createdAt).toLocaleDateString()}: sleep ${response.metrics.sleep}/10`),
       severity: 'attention',
+      source: 'check_in',
       metric: 'sleep',
       detectedAt,
     })
@@ -125,6 +130,7 @@ function detectSignals(responses: CheckInResponse[], schedules: CheckInSchedule[
       detail: `Symptom severity rose from ${lastThree[0].metrics.symptomSeverity}/10 to ${lastThree[2].metrics.symptomSeverity}/10 across the three latest check-ins.`,
       evidence: lastThree.map((response) => `${new Date(response.createdAt).toLocaleDateString()}: symptoms ${response.metrics.symptomSeverity}/10`),
       severity: 'attention',
+      source: 'check_in',
       metric: 'symptomSeverity',
       detectedAt,
     })
@@ -138,6 +144,7 @@ function detectSignals(responses: CheckInResponse[], schedules: CheckInSchedule[
       detail: `The two latest stress scores average ${roundOne(average(lastTwo.map((response) => response.metrics.stress)))}/10.`,
       evidence: lastTwo.map((response) => `${new Date(response.createdAt).toLocaleDateString()}: stress ${response.metrics.stress}/10`),
       severity: 'watch',
+      source: 'check_in',
       metric: 'stress',
       detectedAt,
     })
@@ -150,6 +157,7 @@ function detectSignals(responses: CheckInResponse[], schedules: CheckInSchedule[
       detail: 'This is a patient-reported experience, not a determination that a medication caused the symptoms. Medication changes should be reviewed with a clinician.',
       evidence: [`${new Date(latest.createdAt).toLocaleDateString()}: medication experience marked ${latest.metrics.medicationExperience.replace('_', ' ')}`, latest.response || 'No additional narrative was entered.'],
       severity: 'attention',
+      source: 'check_in',
       detectedAt,
     })
   }
@@ -168,6 +176,7 @@ function detectSignals(responses: CheckInResponse[], schedules: CheckInSchedule[
         detail: `${schedule.title} had ${expected} expected opportunities and ${completed} recorded responses in the last 10 days. This may reflect skipped check-ins, paused app use, or incomplete local history.`,
         evidence: [`Expected occurrences: ${expected}`, `Recorded responses: ${completed}`, `Difference: ${missed}`],
         severity: 'watch',
+        source: 'check_in',
         detectedAt,
       })
     }
@@ -194,6 +203,7 @@ function detectSignals(responses: CheckInResponse[], schedules: CheckInSchedule[
           detail: `Average symptom severity was ${beforeAverage}/10 before and ${afterAverage}/10 after “${medicationEvent.title}.” The timing overlaps, but the record does not establish that the medication event caused the change.`,
           evidence: [`Medication timeline event: ${medicationEvent.displayDate} · ${medicationEvent.title}`, `Before average: ${beforeAverage}/10`, `After average: ${afterAverage}/10`],
           severity: 'attention',
+          source: 'check_in',
           metric: 'symptomSeverity',
           detectedAt,
         })
@@ -204,22 +214,72 @@ function detectSignals(responses: CheckInResponse[], schedules: CheckInSchedule[
   return signals
 }
 
+function detectAppleHealthSignals(days: AppleHealthDay[], permissions: AppleHealthCategory[]): Omit<HealthSignal, 'status' | 'findingId'>[] {
+  const ordered = [...days].sort((a, b) => a.date.localeCompare(b.date))
+  if (ordered.length < 7) return []
+  const recent = ordered.slice(-3)
+  const baseline = ordered.slice(Math.max(0, ordered.length - 10), -3)
+  if (baseline.length < 4) return []
+  const latest = ordered[ordered.length - 1]
+  const detectedAt = `${latest.date}T12:00:00.000Z`
+  const signals: Omit<HealthSignal, 'status' | 'findingId'>[] = []
+
+  if (permissions.includes('sleep')) {
+    const recentSleep = roundOne(average(recent.map((day) => day.sleepHours)))
+    const baselineSleep = roundOne(average(baseline.map((day) => day.sleepHours)))
+    if (recentSleep <= baselineSleep - 1) {
+      signals.push({
+        id: 'apple-health-sleep-duration-decline',
+        title: 'Apple Health demo shows shorter recent sleep duration',
+        detail: `The latest three nights average ${recentSleep} hours compared with ${baselineSleep} hours across the preceding ${baseline.length} nights. This is a wearable-data pattern, not a diagnosis or explanation for why sleep changed.`,
+        evidence: [...baseline.slice(-3), ...recent].map((day) => `${day.date}: ${day.sleepHours} hours sleep · ${day.sourceDevice} · manually entered: ${day.manuallyEntered ? 'yes' : 'no'}`),
+        severity: 'attention',
+        source: 'apple_health_demo',
+        metric: 'sleep_duration',
+        detectedAt,
+      })
+    }
+  }
+
+  if (permissions.includes('resting_heart_rate')) {
+    const recentResting = roundOne(average(recent.map((day) => day.restingHeartRate)))
+    const baselineResting = roundOne(average(baseline.map((day) => day.restingHeartRate)))
+    if (recentResting >= baselineResting + 7) {
+      signals.push({
+        id: 'apple-health-resting-heart-rate-rise',
+        title: 'Apple Health demo shows a higher recent resting heart rate',
+        detail: `The latest three daily resting-heart-rate summaries average ${recentResting} bpm compared with ${baselineResting} bpm across the preceding ${baseline.length} days. Vital Passport does not determine the cause or clinical significance.`,
+        evidence: [...baseline.slice(-3), ...recent].map((day) => `${day.date}: resting heart rate ${day.restingHeartRate} bpm · ${day.sourceDevice} · manually entered: ${day.manuallyEntered ? 'yes' : 'no'}`),
+        severity: 'attention',
+        source: 'apple_health_demo',
+        metric: 'resting_heart_rate',
+        detectedAt,
+      })
+    }
+  }
+
+  return signals
+}
+
 function signalUpload(signal: Omit<HealthSignal, 'status' | 'findingId'>): UploadItem {
+  const wearable = signal.source === 'apple_health_demo'
   const summary = `${signal.detail} Evidence: ${signal.evidence.join(' | ')}`
   const extraction: HealthExtraction = {
     document_type: 'symptom_note',
     title: signal.title,
     summary,
     event_date: signal.detectedAt.slice(0, 10),
-    facility: 'Vital Passport deterministic signal engine',
+    facility: wearable ? 'Apple Health demo sync' : 'Vital Passport deterministic signal engine',
     medications: [],
     lab_results: [],
     diagnoses: [],
     instructions: [],
     symptoms: [],
     follow_up: '',
-    evidence: [{ field: 'Deterministic trend rule', value: signal.title, quote: signal.evidence.join(' | '), confidence: 1 }],
-    warnings: ['Trend signal requires patient review before inclusion in the confirmed record.'],
+    evidence: [{ field: wearable ? 'Wearable data trend rule' : 'Deterministic trend rule', value: signal.title, quote: signal.evidence.join(' | '), confidence: 1 }],
+    warnings: [wearable
+      ? 'Synthetic wearable-data signal requires patient review and does not establish clinical significance or causation.'
+      : 'Trend signal requires patient review before inclusion in the confirmed record.'],
     requires_confirmation: true,
     confidence: 1,
     mode: 'demo',
@@ -227,7 +287,7 @@ function signalUpload(signal: Omit<HealthSignal, 'status' | 'findingId'>): Uploa
   return {
     id: `signal-${signal.id}`,
     name: signal.title,
-    type: 'symptom',
+    type: wearable ? 'document' : 'symptom',
     date: 'Today',
     status: 'ready',
     summary,
@@ -241,13 +301,17 @@ export function HealthSignalsProvider({ children }: { children: ReactNode }) {
   const { responses, schedules } = useCheckIns()
   const { findings, queueExtractionFindings } = useHealthInbox()
   const { timelineEvents } = useVital()
+  const appleHealth = useAppleHealthDemo()
 
   const structuredResponses = useMemo(() => structured(responses).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [responses])
   const trends = useMemo<Record<TrendWindow, MetricTrend[]>>(() => ({
     '7d': buildTrends(responses, 7),
     '30d': buildTrends(responses, 30),
   }), [responses])
-  const detected = useMemo(() => detectSignals(responses, schedules, timelineEvents), [responses, schedules, timelineEvents])
+  const detected = useMemo(() => [
+    ...detectSignals(responses, schedules, timelineEvents),
+    ...(appleHealth.status === 'connected' ? detectAppleHealthSignals(appleHealth.days, appleHealth.permissions) : []),
+  ], [responses, schedules, timelineEvents, appleHealth.status, appleHealth.days, appleHealth.permissions])
 
   useEffect(() => {
     detected.forEach((signal) => {
@@ -270,8 +334,17 @@ export function HealthSignalsProvider({ children }: { children: ReactNode }) {
       signals,
       trends,
       recentResponses: structuredResponses.slice(0, 30),
+      wearableData: {
+        provider: 'Apple Health demo',
+        status: appleHealth.status,
+        permissions: appleHealth.permissions,
+        lastSyncAt: appleHealth.lastSyncAt,
+        days: appleHealth.days.slice(-30),
+        syncHistory: appleHealth.syncHistory.slice(0, 10),
+        interpretationBoundary: 'Synthetic demo data. Measurements describe recorded values and trends only; they do not diagnose, determine clinical significance, or establish causation.',
+      },
     }))
-  }, [signals, trends, structuredResponses])
+  }, [signals, trends, structuredResponses, appleHealth.status, appleHealth.permissions, appleHealth.lastSyncAt, appleHealth.days, appleHealth.syncHistory])
 
   return <HealthSignalsContext.Provider value={{
     signals,
