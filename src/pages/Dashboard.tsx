@@ -1,9 +1,10 @@
-import { AlertCircle, ArrowRight, BellRing, Bot, Brain, CalendarClock, CheckCircle2, ChevronRight, CircleCheck, CircleDashed, FileText, GitCompareArrows, HeartPulse, Inbox as InboxIcon, ListChecks, Pill, ScanSearch, Sparkles, TestTube2 } from 'lucide-react'
+import { Activity, AlertCircle, ArrowRight, BellRing, Bot, Brain, CalendarClock, CheckCircle2, ChevronRight, CircleCheck, CircleDashed, FileText, GitCompareArrows, HeartPulse, Inbox as InboxIcon, ListChecks, Pill, ScanSearch, Sparkles, TestTube2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { ProgressRing } from '../components/ProgressRing'
 import { useCheckIns } from '../context/CheckInContext'
 import { useCopilotMemory } from '../context/CopilotMemoryContext'
 import { useHealthInbox } from '../context/HealthInboxContext'
+import { useHealthSignals } from '../context/HealthSignalsContext'
 import { useVital } from '../context/VitalContext'
 import { patient } from '../data/demo'
 import { openCopilotDrawer } from '../lib/copilot-drawer'
@@ -35,9 +36,11 @@ export function Dashboard() {
   const { pendingFindings, pendingCount } = useHealthInbox()
   const { nextSchedule, dueCount, startCheckIn } = useCheckIns()
   const { activeMemories } = useCopilotMemory()
+  const { pendingSignals, confirmedSignals, structuredResponses } = useHealthSignals()
   const openTasks=careTasks.filter((task)=>task.status==='open')
   const metoprololIssue=reconciliationIssues.find((issue)=>issue.id==='issue-metoprolol')
   const displayedIssues=[...reconciliationIssues].sort((a,b)=>a.status===b.status?b.createdAt.localeCompare(a.createdAt):a.status==='open'?-1:1).slice(0,3)
+  const leadSignal=pendingSignals[0] || confirmedSignals[0]
 
   return (
     <div className="page dashboard-page">
@@ -51,11 +54,11 @@ export function Dashboard() {
         <div className="copilot-launch-copy">
           <div className="eyebrow">Your Health Copilot</div>
           <h2>Ask the record, not another portal.</h2>
-          <p>Vital Passport can read across {sources.length} source records, {timelineEvents.length} timeline events, medications, labs, and patient-confirmed context while showing exactly where every answer came from.</p>
+          <p>Vital Passport can read across {sources.length} source records, {timelineEvents.length} timeline events, medications, labs, patient-confirmed context, and structured check-in trends while showing exactly where every answer came from.</p>
           <div className="copilot-launch-prompts">
             <button onClick={() => openCopilotDrawer('What changed in my health record recently?')}>What changed recently?</button>
             <button onClick={() => openCopilotDrawer('What should I clarify before my next visit?')}>What should I clarify?</button>
-            <button onClick={() => openCopilotDrawer('What do you remember about my goals and preferences?')}>What do you remember?</button>
+            <button onClick={() => openCopilotDrawer('Explain my recent check-in trends without diagnosing me or claiming causation.')}>Explain my trends</button>
           </div>
         </div>
         <button onClick={() => openCopilotDrawer()} className="button primary copilot-launch-button">Open Health Copilot <ArrowRight size={17}/></button>
@@ -83,6 +86,12 @@ export function Dashboard() {
         <div><div className="eyebrow">Proactive check-in</div><h2>{dueCount ? 'Vital Passport is checking in with you' : nextSchedule.title}</h2><p>{dueCount ? nextSchedule.prompt : `${nextSchedule.prompt} · ${formatCheckInDue(nextSchedule.nextDueAt)}`}</p></div>
         <button className={`button ${dueCount ? 'primary' : 'light'}`} onClick={() => startCheckIn(nextSchedule.id)}>{dueCount ? 'Answer now' : 'Check in early'}</button>
       </section>}
+
+      <section className={`dashboard-signals-preview ${pendingSignals.length ? 'attention' : ''}`}>
+        <span><Activity size={21}/></span>
+        <div><div className="eyebrow">Health signals</div><h2>{pendingSignals.length ? `${pendingSignals.length} ${pendingSignals.length === 1 ? 'pattern needs' : 'patterns need'} review` : confirmedSignals.length ? `${confirmedSignals.length} patient-confirmed ${confirmedSignals.length === 1 ? 'pattern' : 'patterns'}` : 'Your trend baseline is forming'}</h2><p>{leadSignal?.title || `${structuredResponses.length} structured check-ins are available for local trend analysis.`}</p></div>
+        <Link to="/signals" className={`button ${pendingSignals.length ? 'primary' : 'light'}`}>{pendingSignals.length ? 'Review signals' : 'View trends'} <ArrowRight size={16}/></Link>
+      </section>
 
       <section className="hero-card">
         <div className="hero-copy">
