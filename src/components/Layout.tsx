@@ -1,4 +1,4 @@
-import { Activity, ArrowUpFromLine, BellRing, Bot, Brain, CalendarDays, ChevronRight, ClipboardList, FileHeart, FlaskConical, Home, Inbox as InboxIcon, Menu, PlusCircle, RotateCcw, ShieldCheck, Sparkles, Watch, X } from 'lucide-react'
+import { Activity, ArrowUpFromLine, BellRing, Bot, Brain, CalendarDays, ChevronRight, ClipboardList, FileHeart, FlaskConical, FolderLock, Home, Inbox as InboxIcon, Menu, PlusCircle, RotateCcw, ShieldCheck, Sparkles, Watch, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { patient } from '../data/demo'
@@ -18,6 +18,7 @@ import { SourceDrawer } from './SourceDrawer'
 const navItems = [
   { to: '/', label: 'Health home', icon: Home },
   { to: '/add', label: 'Add health info', icon: PlusCircle },
+  { to: '/documents', label: 'Private sources', icon: FolderLock },
   { to: '/timeline', label: 'Timeline', icon: CalendarDays },
   { to: '/prepare', label: 'Prepare for visit', icon: ClipboardList },
   { to: '/brief', label: 'Shareable brief', icon: FileHeart },

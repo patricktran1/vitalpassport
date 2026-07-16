@@ -4,6 +4,7 @@ import {
   normalizeCloudRecord,
   type PatientCloudBundle,
 } from './cloudBundle'
+import { SOURCE_DOCUMENT_BUCKET } from './sourceDocuments'
 
 export interface CloudRecordResult {
   bundle: PatientCloudBundle | null
@@ -19,6 +20,10 @@ export function cloudErrorMessage(error: { message?: string; code?: string } | n
     return 'Supabase rejected the record through Row Level Security. Confirm that supabase/schema.sql was run and that you are signed in.'
   }
   return message
+}
+
+function missingRelation(error: { message?: string; code?: string } | null | undefined) {
+  return error?.code === '42P01' || /relation .* does not exist/i.test(error?.message || '')
 }
 
 export async function loadCloudBundle(client: SupabaseClient, userId: string): Promise<CloudRecordResult> {
@@ -54,6 +59,30 @@ export async function saveCloudBundle(client: SupabaseClient, userId: string, bu
 }
 
 export async function deleteCloudBundle(client: SupabaseClient, userId: string) {
+  const { data: sourceRows, error: sourceListError } = await client
+    .from('source_documents')
+    .select('storage_path')
+    .eq('owner_id', userId)
+
+  if (sourceListError && !missingRelation(sourceListError)) throw new Error(cloudErrorMessage(sourceListError))
+
+  const storagePaths = (sourceRows || [])
+    .map((row) => typeof row.storage_path === 'string' ? row.storage_path : '')
+    .filter(Boolean)
+
+  if (storagePaths.length) {
+    const { error: storageError } = await client.storage.from(SOURCE_DOCUMENT_BUCKET).remove(storagePaths)
+    if (storageError && !/bucket not found|not found/i.test(storageError.message)) throw new Error(cloudErrorMessage(storageError))
+  }
+
+  if (!sourceListError) {
+    const { error: sourceDeleteError } = await client.from('source_documents').delete().eq('owner_id', userId)
+    if (sourceDeleteError) throw new Error(cloudErrorMessage(sourceDeleteError))
+  }
+
+  const { error: shareDeleteError } = await client.from('shared_briefs').delete().eq('owner_id', userId)
+  if (shareDeleteError && !missingRelation(shareDeleteError)) throw new Error(cloudErrorMessage(shareDeleteError))
+
   const { error } = await client.from('patient_records').delete().eq('user_id', userId)
   if (error) throw new Error(cloudErrorMessage(error))
 }

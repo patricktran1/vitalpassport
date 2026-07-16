@@ -5,6 +5,7 @@ import { AppleHealthDemo } from './pages/AppleHealthDemo'
 import { Brief } from './pages/Brief'
 import { CheckIns } from './pages/CheckIns'
 import { Copilot } from './pages/Copilot'
+import { Documents } from './pages/Documents'
 import { HealthInbox } from './pages/HealthInbox'
 import { HealthSignals } from './pages/HealthSignals'
 import { Memory } from './pages/Memory'
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="signals" element={<HealthSignals />} />
         <Route path="apple-health" element={<AppleHealthDemo />} />
         <Route path="add" element={<AddHealth />} />
+        <Route path="documents" element={<Documents />} />
         <Route path="timeline" element={<Timeline />} />
         <Route path="prepare" element={<Prepare />} />
         <Route path="brief" element={<Brief />} />
