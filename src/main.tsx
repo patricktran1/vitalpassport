@@ -10,6 +10,7 @@ import { CloudSyncProvider } from './context/CloudSyncContext'
 import { CopilotMemoryProvider } from './context/CopilotMemoryContext'
 import { HealthInboxProvider } from './context/HealthInboxContext'
 import { HealthSignalsProvider } from './context/HealthSignalsContext'
+import { PatientProfileProvider } from './context/PatientProfileContext'
 import { VitalProvider } from './context/VitalContext'
 import { WorkspaceOnboarding, WorkspaceProvider, readWorkspaceMode } from './context/WorkspaceContext'
 import { hydrateSessionFromLocalRecord } from './lib/recordStorage'
@@ -29,25 +30,27 @@ function ProductApp() {
 
   return (
     <WorkspaceProvider mode={mode}>
-      <BrowserRouter>
-        <AuthProvider>
-          <VitalProvider>
-            <HealthInboxProvider>
-              <CopilotMemoryProvider>
-                <CheckInProvider>
-                  <AppleHealthDemoProvider>
-                    <HealthSignalsProvider>
-                      <CloudSyncProvider>
-                        <App />
-                      </CloudSyncProvider>
-                    </HealthSignalsProvider>
-                  </AppleHealthDemoProvider>
-                </CheckInProvider>
-              </CopilotMemoryProvider>
-            </HealthInboxProvider>
-          </VitalProvider>
-        </AuthProvider>
-      </BrowserRouter>
+      <PatientProfileProvider>
+        <BrowserRouter>
+          <AuthProvider>
+            <VitalProvider>
+              <HealthInboxProvider>
+                <CopilotMemoryProvider>
+                  <CheckInProvider>
+                    <AppleHealthDemoProvider>
+                      <HealthSignalsProvider>
+                        <CloudSyncProvider>
+                          <App />
+                        </CloudSyncProvider>
+                      </HealthSignalsProvider>
+                    </AppleHealthDemoProvider>
+                  </CheckInProvider>
+                </CopilotMemoryProvider>
+              </HealthInboxProvider>
+            </VitalProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </PatientProfileProvider>
     </WorkspaceProvider>
   )
 }
