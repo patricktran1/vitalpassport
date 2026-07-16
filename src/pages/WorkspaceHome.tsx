@@ -1,8 +1,9 @@
-import { BellRing, Bot, FileUp, FlaskConical, Inbox, PlusCircle, ShieldCheck } from 'lucide-react'
+import { BellRing, Bot, CircleUserRound, FileUp, FlaskConical, Inbox, PlusCircle, ShieldCheck } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useCheckIns } from '../context/CheckInContext'
 import { useHealthInbox } from '../context/HealthInboxContext'
+import { usePatientProfile } from '../context/PatientProfileContext'
 import { useVital } from '../context/VitalContext'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { openCopilotDrawer } from '../lib/copilot-drawer'
@@ -11,6 +12,7 @@ import { Dashboard } from './Dashboard'
 export function WorkspaceHome() {
   const workspace = useWorkspace()
   const auth = useAuth()
+  const patientProfile = usePatientProfile()
   const vital = useVital()
   const inbox = useHealthInbox()
   const checkIns = useCheckIns()
@@ -21,13 +23,15 @@ export function WorkspaceHome() {
 
   return <div className="page personal-empty-home">
     <section className="page-heading split-heading">
-      <div><div className="eyebrow">My Vital Passport</div><h1>{hasRecord ? 'Your health story is taking shape.' : 'Start with a clean slate.'}</h1><p>{auth.user ? `Signed in as ${auth.user.email}. Only information you add or confirm belongs in this personal workspace.` : 'This personal workspace is empty and local to this browser until you sign in.'}</p></div>
+      <div><div className="eyebrow">My Vital Passport</div><h1>{patientProfile.profile.name ? `${patientProfile.profile.name}’s health story` : hasRecord ? 'Your health story is taking shape.' : 'Start with a clean slate.'}</h1><p>{auth.user ? `Signed in as ${auth.user.email}. Only information you add or confirm belongs in this personal workspace.` : 'This personal workspace is empty and local to this browser until you sign in.'}</p></div>
       <Link className="button primary" to="/add"><PlusCircle size={16}/> Add health information</Link>
     </section>
 
+    {!patientProfile.profile.name&&<section className="profile-setup-card"><div><strong>Name this Vital Passport</strong><span>Add the patient name, date of birth, pronouns, conditions, and allergies used on the clinician brief.</span></div><Link className="button ghost" to="/profile"><CircleUserRound size={16}/> Set up profile</Link></section>}
+
     <section className="personal-welcome-card">
       <div className="eyebrow">Patient-controlled from the first click</div>
-      <h2>{hasRecord ? `${vital.sources.length} source records connected` : 'Nothing from Maria’s demo is in this Passport.'}</h2>
+      <h2>{hasRecord ? `${vital.sources.length} source records connected` : 'This Passport begins with no health records.'}</h2>
       <p>{hasRecord ? `You have ${vital.timelineEvents.length} timeline events, ${inbox.pendingCount} Inbox items awaiting review, and ${checkIns.responses.length} recorded check-ins.` : 'Add a document, medication photo, symptom note, or question when you are ready. New findings enter Health Inbox before they can change the confirmed record.'}</p>
     </section>
 
@@ -42,6 +46,6 @@ export function WorkspaceHome() {
       <div className="dashboard-inbox-clear"><ShieldCheck size={18}/><span>Only patient-confirmed information enters the shared health story.</span></div>
     </section>
 
-    <section className="workspace-account-card"><FlaskConical size={18}/><div><strong>Maria remains available as a separate demo</strong><p>Open the account and storage panel to explore the synthetic case. Your personal workspace is saved before switching and restored when you return.</p></div></section>
+    <section className="workspace-account-card"><FlaskConical size={18}/><div><strong>A synthetic walkthrough remains available separately</strong><p>Open the account and storage panel to explore the demo. Your personal workspace is saved before switching and restored when you return.</p></div></section>
   </div>
 }
