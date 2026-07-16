@@ -13,7 +13,7 @@ import {
 } from '../lib/cloudBundle'
 import { deleteCloudBundle, loadCloudBundle, saveCloudBundle } from '../lib/cloudSyncService'
 import { CLOUD_LOADED_USER_KEY, saveLocalSnapshot } from '../lib/recordStorage'
-import { clearPersonalWorkspace, reloadWorkspace } from '../lib/workspace'
+import { clearPersonalWorkspace, PERSONAL_SANDBOX_KEY, reloadWorkspace } from '../lib/workspace'
 import type { CloudSyncStatus, PatientRecordSnapshot } from '../types'
 
 interface SupabaseSyncContextValue {
@@ -24,10 +24,20 @@ interface SupabaseSyncContextValue {
   schemaVersion: number
   syncedModules: readonly string[]
   hasCloudRecord: boolean | null
+  legacyDemoCloud: boolean
   syncNow: () => Promise<void>
   reloadFromCloud: () => Promise<void>
   deleteCloudRecord: () => Promise<void>
   resetToBlank: () => Promise<void>
+}
+
+function isLegacyMariaBundle(bundle: PatientCloudBundle) {
+  if (bundle.browserState.local[PERSONAL_SANDBOX_KEY] === 'true') return false
+  const sourceIds = new Set(bundle.coreRecord.sources.map((source) => source.id))
+  const medicationIds = new Set(bundle.coreRecord.clinicalMedications.map((medication) => medication.id))
+  return sourceIds.has('src-bottle')
+    && sourceIds.has('src-labs')
+    && medicationIds.has('med-metoprolol-bottle')
 }
 
 const SupabaseSyncContext = createContext<SupabaseSyncContextValue | undefined>(undefined)
@@ -40,6 +50,7 @@ export function SupabaseSyncProvider({ children }: { children: ReactNode }) {
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [hasCloudRecord, setHasCloudRecord] = useState<boolean | null>(null)
+  const [legacyDemoCloud, setLegacyDemoCloud] = useState(false)
   const syncInFlight = useRef(false)
   const lastUploadedSignature = useRef('')
 
@@ -69,6 +80,7 @@ export function SupabaseSyncProvider({ children }: { children: ReactNode }) {
 
   const pushBundle = useCallback(async (bundle: PatientCloudBundle) => {
     if (workspace.isDemo) throw new Error('Maria demo data stays local unless you explicitly copy it into your account.')
+    if (legacyDemoCloud) throw new Error('A legacy Maria demo bundle is quarantined in this account. Reset the cloud record to blank before saving personal information.')
     if (!supabase || !auth.user || syncInFlight.current) return
     syncInFlight.current = true
     setStatus('saving')
@@ -79,6 +91,7 @@ export function SupabaseSyncProvider({ children }: { children: ReactNode }) {
       lastUploadedSignature.current = cloudBundleSignature(bundle)
       setLastSyncedAt(syncedAt)
       setHasCloudRecord(true)
+      setLegacyDemoCloud(false)
       setStatus('synced')
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : 'The cloud record could not be synchronized.'
@@ -88,7 +101,7 @@ export function SupabaseSyncProvider({ children }: { children: ReactNode }) {
     } finally {
       syncInFlight.current = false
     }
-  }, [auth.user, workspace.isDemo])
+  }, [auth.user, legacyDemoCloud, workspace.isDemo])
 
   const syncNow = useCallback(async () => {
     await pushBundle(captureCloudBundle(snapshot))
@@ -101,6 +114,19 @@ export function SupabaseSyncProvider({ children }: { children: ReactNode }) {
     lastUploadedSignature.current = cloudBundleSignature(bundle)
     setLastSyncedAt(updatedAt || bundle.updatedAt)
     setHasCloudRecord(true)
+    setLegacyDemoCloud(false)
+  }, [])
+
+  const quarantineIfLegacyDemo = useCallback((bundle: PatientCloudBundle | null, updatedAt: string | null) => {
+    if (!bundle || !isLegacyMariaBundle(bundle)) return false
+    window.sessionStorage.removeItem(CLOUD_LOADED_USER_KEY)
+    lastUploadedSignature.current = ''
+    setHasCloudRecord(true)
+    setLegacyDemoCloud(true)
+    setLastSyncedAt(updatedAt || bundle.updatedAt)
+    setStatus('synced')
+    setError('')
+    return true
   }, [])
 
   const reloadFromCloud = useCallback(async () => {
@@ -115,6 +141,7 @@ export function SupabaseSyncProvider({ children }: { children: ReactNode }) {
         await syncNow()
         return
       }
+      if (quarantineIfLegacyDemo(result.bundle, result.updatedAt)) return
       applyCloudBundle(result.bundle, result.updatedAt, auth.user.id)
       window.location.reload()
     } catch (caught) {
@@ -123,7 +150,7 @@ export function SupabaseSyncProvider({ children }: { children: ReactNode }) {
       setError(message)
       throw new Error(message)
     }
-  }, [applyCloudBundle, auth.user, syncNow, workspace.isDemo])
+  }, [applyCloudBundle, auth.user, quarantineIfLegacyDemo, syncNow, workspace.isDemo])
 
   const deleteCloudRecord = useCallback(async () => {
     if (!supabase || !auth.user) return
@@ -135,6 +162,7 @@ export function SupabaseSyncProvider({ children }: { children: ReactNode }) {
       lastUploadedSignature.current = ''
       setLastSyncedAt(null)
       setHasCloudRecord(false)
+      setLegacyDemoCloud(false)
       setStatus('local')
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : 'The cloud record could not be deleted.'
@@ -154,15 +182,18 @@ export function SupabaseSyncProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!auth.user || !supabase) {
       setHasCloudRecord(null)
+      setLegacyDemoCloud(false)
       return
     }
     const client = supabase
     let cancelled = false
     void loadCloudBundle(client, auth.user.id).then((result) => {
-      if (!cancelled) setHasCloudRecord(Boolean(result.bundle))
+      if (cancelled) return
+      setHasCloudRecord(Boolean(result.bundle))
+      if (workspace.isDemo) setLegacyDemoCloud(Boolean(result.bundle && isLegacyMariaBundle(result.bundle)))
     }).catch(() => undefined)
     return () => { cancelled = true }
-  }, [auth.user?.id])
+  }, [auth.user?.id, workspace.isDemo])
 
   useEffect(() => {
     if (auth.loading) {
@@ -179,6 +210,7 @@ export function SupabaseSyncProvider({ children }: { children: ReactNode }) {
       setStatus('local')
       setError('')
       lastUploadedSignature.current = ''
+      setLegacyDemoCloud(false)
       return
     }
 
@@ -202,6 +234,7 @@ export function SupabaseSyncProvider({ children }: { children: ReactNode }) {
           await pushBundle(captureCloudBundle(snapshot))
           return
         }
+        if (quarantineIfLegacyDemo(result.bundle, result.updatedAt)) return
 
         applyCloudBundle(result.bundle, result.updatedAt, userId)
         if (!result.bundle.browserState.complete) {
@@ -220,7 +253,7 @@ export function SupabaseSyncProvider({ children }: { children: ReactNode }) {
   }, [auth.configured, auth.loading, auth.user?.id, workspace.isDemo])
 
   useEffect(() => {
-    if (workspace.isDemo || !auth.user || !supabase) return
+    if (workspace.isDemo || legacyDemoCloud || !auth.user || !supabase) return
     if (window.sessionStorage.getItem(CLOUD_LOADED_USER_KEY) !== auth.user.id) return
 
     const checkForChanges = () => {
@@ -238,7 +271,7 @@ export function SupabaseSyncProvider({ children }: { children: ReactNode }) {
       window.clearInterval(interval)
       window.removeEventListener('storage', checkForChanges)
     }
-  }, [auth.user?.id, pushBundle, snapshot, workspace.isDemo])
+  }, [auth.user?.id, legacyDemoCloud, pushBundle, snapshot, workspace.isDemo])
 
   const value = useMemo<SupabaseSyncContextValue>(() => ({
     status,
@@ -248,11 +281,12 @@ export function SupabaseSyncProvider({ children }: { children: ReactNode }) {
     schemaVersion: CLOUD_BUNDLE_SCHEMA_VERSION,
     syncedModules: syncedCloudModules,
     hasCloudRecord,
+    legacyDemoCloud,
     syncNow,
     reloadFromCloud,
     deleteCloudRecord,
     resetToBlank,
-  }), [auth.configured, auth.user, deleteCloudRecord, error, hasCloudRecord, lastSyncedAt, reloadFromCloud, resetToBlank, status, syncNow, workspace.isDemo])
+  }), [auth.configured, auth.user, deleteCloudRecord, error, hasCloudRecord, lastSyncedAt, legacyDemoCloud, reloadFromCloud, resetToBlank, status, syncNow, workspace.isDemo])
 
   return <SupabaseSyncContext.Provider value={value}>{children}</SupabaseSyncContext.Provider>
 }
