@@ -25,9 +25,11 @@ export function AccountPanel({ compact = false }: { compact?: boolean }) {
 
   const label = workspace.isDemo
     ? 'Maria demo'
-    : auth.user
-      ? sync.status === 'saving' ? 'Saving…' : sync.status === 'error' ? 'Sync needs attention' : 'Cloud saved'
-      : auth.configured ? 'Sign in to save' : 'Local record'
+    : sync.legacyDemoCloud
+      ? 'Demo migration needs review'
+      : auth.user
+        ? sync.status === 'saving' ? 'Saving…' : sync.status === 'error' ? 'Sync needs attention' : 'Cloud saved'
+        : auth.configured ? 'Sign in to save' : 'Local record'
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
@@ -85,7 +87,10 @@ export function AccountPanel({ compact = false }: { compact?: boolean }) {
   }
 
   const resetBlank = async () => {
-    if (!window.confirm('Replace your personal Vital Passport with a completely blank record? This removes the current cloud bundle and cannot be undone.')) return
+    const warning = sync.legacyDemoCloud
+      ? 'Delete the quarantined Maria demo bundle and create a completely blank personal Vital Passport?'
+      : 'Replace your personal Vital Passport with a completely blank record? This removes the current cloud bundle and cannot be undone.'
+    if (!window.confirm(warning)) return
     setActionError('')
     try {
       await sync.resetToBlank()
@@ -109,21 +114,23 @@ export function AccountPanel({ compact = false }: { compact?: boolean }) {
 
   return <>
     <button className={compact ? 'account-button compact' : 'account-button'} onClick={() => setOpen(true)} aria-label="Open account and storage settings">
-      <span className={`account-icon ${auth.user && !workspace.isDemo ? 'connected' : ''}`}>{workspace.isDemo ? <FlaskConical size={compact ? 17 : 18}/> : auth.user ? <Cloud size={compact ? 17 : 18}/> : <CloudOff size={compact ? 17 : 18}/>}</span>
-      {!compact&&<span><strong>{label}</strong><small>{workspace.isDemo ? 'Synthetic data · local only' : auth.user?.email || (auth.configured ? 'Supabase account persistence' : 'Stored on this device')}</small></span>}
+      <span className={`account-icon ${auth.user && !workspace.isDemo && !sync.legacyDemoCloud ? 'connected' : ''}`}>{workspace.isDemo ? <FlaskConical size={compact ? 17 : 18}/> : sync.legacyDemoCloud ? <TriangleAlert size={compact ? 17 : 18}/> : auth.user ? <Cloud size={compact ? 17 : 18}/> : <CloudOff size={compact ? 17 : 18}/>}</span>
+      {!compact&&<span><strong>{label}</strong><small>{workspace.isDemo ? 'Synthetic data · local only' : sync.legacyDemoCloud ? 'Maria was blocked from your personal record' : auth.user?.email || (auth.configured ? 'Supabase account persistence' : 'Stored on this device')}</small></span>}
     </button>
 
     {open&&<Modal title={workspace.isDemo ? 'Maria demo workspace' : 'Your Vital Passport'} onClose={() => setOpen(false)}>
       <div className="account-status-card">
-        <span className={`account-status-icon ${sync.status}`}>
-          {workspace.isDemo ? <FlaskConical size={22}/> : sync.status === 'saving' || sync.status === 'loading' ? <LoaderCircle size={22}/> : sync.status === 'error' ? <TriangleAlert size={22}/> : auth.user ? <CheckCircle2 size={22}/> : <CloudOff size={22}/>} 
+        <span className={`account-status-icon ${sync.legacyDemoCloud ? 'error' : sync.status}`}>
+          {workspace.isDemo ? <FlaskConical size={22}/> : sync.legacyDemoCloud ? <TriangleAlert size={22}/> : sync.status === 'saving' || sync.status === 'loading' ? <LoaderCircle size={22}/> : sync.status === 'error' ? <TriangleAlert size={22}/> : auth.user ? <CheckCircle2 size={22}/> : <CloudOff size={22}/>} 
         </span>
         <div>
-          <strong>{workspace.isDemo ? 'Synthetic demo, isolated from your record' : auth.user ? 'Account-backed patient record' : 'Local-first patient record'}</strong>
+          <strong>{workspace.isDemo ? 'Synthetic demo, isolated from your record' : sync.legacyDemoCloud ? 'Legacy Maria demo quarantined' : auth.user ? 'Account-backed patient record' : 'Local-first patient record'}</strong>
           <p>{workspace.isDemo
             ? 'Maria’s records, check-ins, wearable data, and Inbox decisions stay in the demo workspace. They are never uploaded automatically, even when you are signed in.'
-            : auth.user ? `Signed in as ${auth.user.email}. Core records, check-ins, Inbox decisions, Copilot memory, signals, and wearable summaries save automatically.` : 'Vital Passport keeps working without an account. Supabase adds authenticated storage and cross-device continuity.'}</p>
-          {auth.user&&!workspace.isDemo&&<small>Last cloud save: {formatSyncTime(sync.lastSyncedAt)} · Bundle schema v{sync.schemaVersion}</small>}
+            : sync.legacyDemoCloud
+              ? 'An older test uploaded Maria’s synthetic bundle to this account. Vital Passport recognized it and did not load it into your personal workspace. Reset the cloud record to continue with a blank Passport.'
+              : auth.user ? `Signed in as ${auth.user.email}. Core records, check-ins, Inbox decisions, Copilot memory, signals, and wearable summaries save automatically.` : 'Vital Passport keeps working without an account. Supabase adds authenticated storage and cross-device continuity.'}</p>
+          {auth.user&&!workspace.isDemo&&<small>Last cloud activity: {formatSyncTime(sync.lastSyncedAt)} · Bundle schema v{sync.schemaVersion}</small>}
         </div>
       </div>
 
@@ -131,9 +138,11 @@ export function AccountPanel({ compact = false }: { compact?: boolean }) {
 
       {workspace.isDemo&&<div className="workspace-account-card"><FlaskConical size={18}/><div><strong>Choose when you are ready</strong><p>Start a blank personal Passport, or explicitly copy this demo into your account as a sandbox. Keeping the demo open does nothing to your cloud record.</p></div></div>}
 
+      {sync.legacyDemoCloud&&<div className="account-setup-note"><TriangleAlert size={18}/><div><strong>No demo data was imported</strong><p>Your current personal workspace remains blank. Use “Reset cloud to blank” below to delete the older Maria bundle and activate normal synchronization.</p></div></div>}
+
       {!workspace.isDemo&&workspace.isDemoCopy&&<div className="workspace-account-card"><FlaskConical size={18}/><div><strong>Personal sandbox copied from Maria</strong><p>This account currently contains synthetic demo information. Reset to blank before entering your own information.</p></div></div>}
 
-      {auth.user&&!workspace.isDemo&&<div className="account-module-card"><Database size={18}/><div><strong>{sync.syncedModules.length} synchronized data groups</strong><p>{sync.syncedModules.join(' · ')}</p></div></div>}
+      {auth.user&&!workspace.isDemo&&!sync.legacyDemoCloud&&<div className="account-module-card"><Database size={18}/><div><strong>{sync.syncedModules.length} synchronized data groups</strong><p>{sync.syncedModules.join(' · ')}</p></div></div>}
 
       {auth.configured&&!auth.user&&<form className="account-form" onSubmit={submit}>
         <label htmlFor="account-email">Email address</label>
@@ -147,14 +156,20 @@ export function AccountPanel({ compact = false }: { compact?: boolean }) {
         {auth.user&&<button className="button ghost danger-text" onClick={signOut}><LogOut size={16}/> Sign out</button>}
       </div>}
 
-      {auth.user&&!workspace.isDemo&&<div className="account-actions">
+      {auth.user&&!workspace.isDemo&&sync.legacyDemoCloud&&<div className="account-actions">
+        <button className="button primary" onClick={resetBlank}><RotateCcw size={16}/> Reset cloud to blank</button>
+        <button className="button ghost" onClick={workspace.openDemo}><FlaskConical size={16}/> View Maria in demo mode</button>
+        <button className="button ghost danger-text" onClick={signOut}><LogOut size={16}/> Sign out</button>
+      </div>}
+
+      {auth.user&&!workspace.isDemo&&!sync.legacyDemoCloud&&<div className="account-actions">
         <button className="button primary" onClick={syncNow} disabled={sync.status === 'saving'}><RefreshCw size={16}/> Save now</button>
         <button className="button ghost" onClick={reloadCloud}><Cloud size={16}/> Reload cloud copy</button>
         <button className="button ghost" onClick={workspace.openDemo}><FlaskConical size={16}/> Open Maria demo</button>
         <button className="button ghost danger-text" onClick={signOut}><LogOut size={16}/> Sign out</button>
       </div>}
 
-      {!workspace.isDemo&&<div className="account-danger-zone">
+      {!workspace.isDemo&&!sync.legacyDemoCloud&&<div className="account-danger-zone">
         <strong>Personal record controls</strong>
         <div className="account-danger-actions">
           <button className="button danger-outline" onClick={resetBlank}><RotateCcw size={16}/> Reset to blank</button>
