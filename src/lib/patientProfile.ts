@@ -38,6 +38,15 @@ export function normalizePatientProfile(value: unknown, fallback: PatientProfile
   }
 }
 
+export function readStoredPatientProfile() {
+  if (typeof window === 'undefined') return blankPatientProfile
+  try {
+    return normalizePatientProfile(JSON.parse(window.localStorage.getItem(PATIENT_PROFILE_KEY) || 'null'), blankPatientProfile)
+  } catch {
+    return blankPatientProfile
+  }
+}
+
 export function calculatePatientAge(dob: string, reference = new Date()) {
   if (!dob) return null
   const date = new Date(`${dob}T12:00:00`)
