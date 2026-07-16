@@ -10,31 +10,49 @@ import { CopilotMemoryProvider } from './context/CopilotMemoryContext'
 import { HealthInboxProvider } from './context/HealthInboxContext'
 import { HealthSignalsProvider } from './context/HealthSignalsContext'
 import { VitalProvider } from './context/VitalContext'
+import { WorkspaceOnboarding, WorkspaceProvider, readWorkspaceMode } from './context/WorkspaceContext'
 import { hydrateSessionFromLocalRecord } from './lib/recordStorage'
 import './styles/index.css'
 
-hydrateSessionFromLocalRecord()
+function ProductApp() {
+  const mode = readWorkspaceMode()
+  const publicRoute = window.location.pathname.startsWith('/s/') || window.location.pathname === '/openemr/callback'
+
+  if (publicRoute) {
+    return <BrowserRouter><App /></BrowserRouter>
+  }
+
+  if (!mode) return <WorkspaceOnboarding />
+
+  hydrateSessionFromLocalRecord()
+
+  return (
+    <WorkspaceProvider mode={mode}>
+      <BrowserRouter>
+        <AuthProvider>
+          <VitalProvider>
+            <HealthInboxProvider>
+              <CopilotMemoryProvider>
+                <CheckInProvider>
+                  <AppleHealthDemoProvider>
+                    <HealthSignalsProvider>
+                      <CloudSyncProvider>
+                        <App />
+                      </CloudSyncProvider>
+                    </HealthSignalsProvider>
+                  </AppleHealthDemoProvider>
+                </CheckInProvider>
+              </CopilotMemoryProvider>
+            </HealthInboxProvider>
+          </VitalProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </WorkspaceProvider>
+  )
+}
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <VitalProvider>
-          <HealthInboxProvider>
-            <CopilotMemoryProvider>
-              <CheckInProvider>
-                <AppleHealthDemoProvider>
-                  <HealthSignalsProvider>
-                    <CloudSyncProvider>
-                      <App />
-                    </CloudSyncProvider>
-                  </HealthSignalsProvider>
-                </AppleHealthDemoProvider>
-              </CheckInProvider>
-            </CopilotMemoryProvider>
-          </HealthInboxProvider>
-        </VitalProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <ProductApp />
   </React.StrictMode>,
 )
