@@ -19,6 +19,11 @@
 .account-setup-note { display:flex; gap:11px; padding:14px; margin-top:13px; background:#f4efe0; border-radius:13px; color:#615738; }
 .account-setup-note strong { font-size:11px; }
 .account-setup-note p { margin:4px 0 0; font-size:10px; line-height:1.5; color:#7a7054; }
+.account-setup-note code { padding:1px 4px; border-radius:5px; background:rgba(255,255,255,.55); font-size:9px; }
+.account-module-card { display:flex; gap:11px; align-items:flex-start; margin-top:13px; padding:13px 14px; border:1px solid #dce5e0; border-radius:13px; background:#f4f8f5; color:#49675e; }
+.account-module-card svg { flex:0 0 auto; margin-top:1px; }
+.account-module-card strong { font-size:10.5px; }
+.account-module-card p { margin:4px 0 0; color:#71817c; font-size:9px; line-height:1.5; }
 .account-form { display:grid; gap:10px; margin-top:16px; }
 .account-form label { font-size:10px; font-weight:800; color:#586b67; }
 .account-email-row { display:grid; grid-template-columns:auto 1fr; gap:9px; align-items:center; min-height:46px; padding:0 13px; border:1px solid var(--line); background:white; border-radius:12px; color:#71817e; }

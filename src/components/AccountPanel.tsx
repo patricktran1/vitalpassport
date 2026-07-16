@@ -1,4 +1,4 @@
-import { CheckCircle2, Cloud, CloudOff, LoaderCircle, LogOut, Mail, RefreshCw, ShieldCheck, TriangleAlert } from 'lucide-react'
+import { CheckCircle2, Cloud, CloudOff, Database, LoaderCircle, LogOut, Mail, RefreshCw, ShieldCheck, TriangleAlert } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useCloudSync } from '../context/CloudSyncContext'
@@ -54,7 +54,7 @@ export function AccountPanel({ compact = false }: { compact?: boolean }) {
     setActionError('')
     try {
       await sync.syncNow()
-      setMessage('The patient record is saved to the account.')
+      setMessage('The complete Vital Passport bundle is saved to the account.')
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'The record could not be saved.')
     }
@@ -72,7 +72,7 @@ export function AccountPanel({ compact = false }: { compact?: boolean }) {
   return <>
     <button className={compact ? 'account-button compact' : 'account-button'} onClick={() => setOpen(true)} aria-label="Open account and storage settings">
       <span className={`account-icon ${auth.user ? 'connected' : ''}`}>{auth.user ? <Cloud size={compact ? 17 : 18}/> : <CloudOff size={compact ? 17 : 18}/>}</span>
-      {!compact&&<span><strong>{label}</strong><small>{auth.user?.email || (auth.configured ? 'Account-backed persistence' : 'Stored on this device')}</small></span>}
+      {!compact&&<span><strong>{label}</strong><small>{auth.user?.email || (auth.configured ? 'Supabase account persistence' : 'Stored on this device')}</small></span>}
     </button>
 
     {open&&<Modal title="Your Vital Passport" onClose={() => setOpen(false)}>
@@ -82,12 +82,14 @@ export function AccountPanel({ compact = false }: { compact?: boolean }) {
         </span>
         <div>
           <strong>{auth.user ? 'Account-backed patient record' : 'Local-first patient record'}</strong>
-          <p>{auth.user ? `Signed in as ${auth.user.email}. Changes save automatically after each update.` : 'Vital Passport keeps working without an account. Sign in to carry this record across devices.'}</p>
-          {auth.user&&<small>Last cloud save: {formatSyncTime(sync.lastSyncedAt)}</small>}
+          <p>{auth.user ? `Signed in as ${auth.user.email}. Core records, check-ins, Inbox decisions, Copilot memory, signals, and wearable summaries save automatically.` : 'Vital Passport keeps working without an account. Supabase adds encrypted transport, authenticated storage, and cross-device continuity.'}</p>
+          {auth.user&&<small>Last cloud save: {formatSyncTime(sync.lastSyncedAt)} · Bundle schema v{sync.schemaVersion}</small>}
         </div>
       </div>
 
-      {!auth.configured&&<div className="account-setup-note"><ShieldCheck size={18}/><div><strong>Cloud accounts are ready in the code</strong><p>Add the Supabase URL and publishable key in Vercel to activate magic-link sign-in. Until then, the record persists locally in this browser.</p></div></div>}
+      {!auth.configured&&<div className="account-setup-note"><ShieldCheck size={18}/><div><strong>Supabase project setup is still required</strong><p>Create a Supabase project, run <code>supabase/schema.sql</code>, then add <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_PUBLISHABLE_KEY</code> in Vercel. Local mode remains active until both variables are deployed.</p></div></div>}
+
+      {auth.user&&<div className="account-module-card"><Database size={18}/><div><strong>{sync.syncedModules.length} synchronized data groups</strong><p>{sync.syncedModules.join(' · ')}</p></div></div>}
 
       {auth.configured&&!auth.user&&<form className="account-form" onSubmit={submit}>
         <label htmlFor="account-email">Email address</label>
@@ -102,7 +104,7 @@ export function AccountPanel({ compact = false }: { compact?: boolean }) {
       </div>}
 
       {(message||actionError||sync.error)&&<div className={`account-message ${actionError||sync.error?'error':''}`}>{actionError || sync.error || message}</div>}
-      <p className="account-privacy"><ShieldCheck size={14}/> Signed-in records are scoped to the authenticated user by database row-level security. This prototype still requires a full privacy, security, and HIPAA review before real-world clinical deployment.</p>
+      <p className="account-privacy"><ShieldCheck size={14}/> Account rows are restricted by Supabase Auth and database Row Level Security. This remains a prototype and still requires a full privacy, security, retention, HIPAA, and clinical-safety review before real patient use.</p>
     </Modal>}
   </>
 }
