@@ -6,6 +6,23 @@ export type CheckInFocus = 'general' | 'mental_health' | 'symptoms' | 'blood_pre
 export type CheckInCadence = 'daily' | 'weekdays' | 'weekly'
 export type CheckInChannel = 'in_app' | 'browser' | 'mock_email' | 'mock_sms'
 export type MockDeliveryChannel = Extract<CheckInChannel, 'mock_email' | 'mock_sms'>
+export type CheckInMetricKey = 'mood' | 'energy' | 'sleep' | 'pain' | 'stress' | 'symptomSeverity'
+export type MedicationExperience = 'not_applicable' | 'better' | 'unchanged' | 'worse' | 'side_effects'
+
+export interface CheckInMetrics {
+  mood: number
+  energy: number
+  sleep: number
+  pain: number
+  stress: number
+  symptomSeverity: number
+  medicationExperience: MedicationExperience
+}
+
+export interface CheckInSubmission {
+  response: string
+  metrics: CheckInMetrics
+}
 
 export interface CheckInSchedule {
   id: string
@@ -29,7 +46,9 @@ export interface CheckInResponse {
   focus: CheckInFocus
   prompt: string
   response: string
+  metrics: CheckInMetrics
   createdAt: string
+  demo?: boolean
 }
 
 export interface MockDelivery {
@@ -67,7 +86,7 @@ interface CheckInContextValue {
   removeSchedule: (scheduleId: string) => void
   startCheckIn: (scheduleId: string) => void
   snoozeActive: (minutes?: number) => void
-  completeCheckIn: (response: string) => void
+  completeCheckIn: (submission: CheckInSubmission) => void
   requestBrowserNotifications: () => Promise<NotificationPermission | 'unsupported'>
   setMockContact: (patch: Partial<MockContact>) => void
   sendMockReminder: (scheduleId: string, channel: MockDeliveryChannel) => void
@@ -75,10 +94,22 @@ interface CheckInContextValue {
 }
 
 const STORAGE_KEY = 'vital-check-ins-v1'
-const RESPONSE_KEY = 'vital-check-in-responses-v1'
+const RESPONSE_KEY = 'vital-check-in-responses-v2'
 const DELIVERY_KEY = 'vital-check-in-mock-deliveries-v1'
 const CONTACT_KEY = 'vital-check-in-mock-contact-v1'
 const defaultContact: MockContact = { email: 'maria.santos@example.com', phone: '(415) 555-0198' }
+
+export const defaultCheckInMetrics: CheckInMetrics = {
+  mood: 5,
+  energy: 5,
+  sleep: 5,
+  pain: 1,
+  stress: 5,
+  symptomSeverity: 5,
+  medicationExperience: 'not_applicable',
+}
+
+const clampScore = (value: number) => Math.max(1, Math.min(10, Math.round(value)))
 
 function validDay(schedule: Pick<CheckInSchedule, 'cadence' | 'weekday'>, date: Date) {
   const day = date.getDay()
@@ -127,6 +158,36 @@ function seedSchedules(): CheckInSchedule[] {
   ]
 }
 
+function atDaysAgo(days: number, hour = 19) {
+  const date = new Date()
+  date.setDate(date.getDate() - days)
+  date.setHours(hour, 0, 0, 0)
+  return date.toISOString()
+}
+
+function seedResponses(): CheckInResponse[] {
+  const points: Array<[number, string, Omit<CheckInMetrics, 'medicationExperience'>, MedicationExperience]> = [
+    [9, 'Felt fairly steady and slept well.', { mood: 7, energy: 7, sleep: 8, pain: 2, stress: 4, symptomSeverity: 3 }, 'unchanged'],
+    [8, 'A little tired but symptoms were manageable.', { mood: 7, energy: 7, sleep: 7, pain: 2, stress: 4, symptomSeverity: 3 }, 'unchanged'],
+    [7, 'Dizziness was more noticeable in the afternoon.', { mood: 6, energy: 6, sleep: 7, pain: 3, stress: 5, symptomSeverity: 4 }, 'unchanged'],
+    [5, 'Sleep was lighter and I felt more drained.', { mood: 6, energy: 5, sleep: 6, pain: 3, stress: 6, symptomSeverity: 5 }, 'unchanged'],
+    [4, 'More stress and dizziness during errands.', { mood: 5, energy: 5, sleep: 5, pain: 4, stress: 7, symptomSeverity: 6 }, 'worse'],
+    [3, 'Poor sleep and stronger symptoms after standing.', { mood: 5, energy: 4, sleep: 4, pain: 4, stress: 8, symptomSeverity: 7 }, 'worse'],
+    [1, 'Very little sleep. Symptoms and fatigue felt worse.', { mood: 4, energy: 4, sleep: 3, pain: 5, stress: 8, symptomSeverity: 8 }, 'side_effects'],
+  ]
+  return points.map(([daysAgo, response, metrics, medicationExperience]) => ({
+    id: `demo-checkin-${daysAgo}`,
+    scheduleId: 'checkin-daily-wellbeing',
+    scheduleTitle: 'Daily wellbeing check-in',
+    focus: 'general',
+    prompt: 'How are you feeling today? Is anything better, worse, or different?',
+    response,
+    metrics: { ...metrics, medicationExperience },
+    createdAt: atDaysAgo(daysAgo),
+    demo: true,
+  })).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
 function readArray<T>(key: string, fallback: T[]) {
   if (typeof window === 'undefined') return fallback
   try {
@@ -134,6 +195,21 @@ function readArray<T>(key: string, fallback: T[]) {
     return Array.isArray(parsed) ? parsed as T[] : fallback
   } catch {
     return fallback
+  }
+}
+
+function readResponses() {
+  if (typeof window === 'undefined') return seedResponses()
+  try {
+    const current = JSON.parse(window.localStorage.getItem(RESPONSE_KEY) || 'null')
+    if (Array.isArray(current)) return current as CheckInResponse[]
+    const legacy = JSON.parse(window.localStorage.getItem('vital-check-in-responses-v1') || 'null')
+    if (Array.isArray(legacy) && legacy.length) {
+      return legacy.map((item) => ({ ...item, metrics: { ...defaultCheckInMetrics } })) as CheckInResponse[]
+    }
+    return seedResponses()
+  } catch {
+    return seedResponses()
   }
 }
 
@@ -170,12 +246,17 @@ function createMockDelivery(schedule: CheckInSchedule, channel: MockDeliveryChan
   }
 }
 
+function metricSummary(metrics: CheckInMetrics) {
+  const medication = metrics.medicationExperience === 'not_applicable' ? '' : ` · Medication ${metrics.medicationExperience.replace('_', ' ')}`
+  return `Mood ${metrics.mood}/10 · Energy ${metrics.energy}/10 · Sleep ${metrics.sleep}/10 · Pain ${metrics.pain}/10 · Stress ${metrics.stress}/10 · Symptom severity ${metrics.symptomSeverity}/10${medication}`
+}
+
 const CheckInContext = createContext<CheckInContextValue | undefined>(undefined)
 
 export function CheckInProvider({ children }: { children: ReactNode }) {
   const { queueExtractionFindings } = useHealthInbox()
   const [schedules, setSchedules] = useState<CheckInSchedule[]>(() => readArray(STORAGE_KEY, seedSchedules()))
-  const [responses, setResponses] = useState<CheckInResponse[]>(() => readArray(RESPONSE_KEY, []))
+  const [responses, setResponses] = useState<CheckInResponse[]>(readResponses)
   const [deliveries, setDeliveries] = useState<MockDelivery[]>(() => readArray(DELIVERY_KEY, []))
   const [mockContact, setMockContactState] = useState<MockContact>(readContact)
   const [activeScheduleId, setActiveScheduleId] = useState<string | null>(null)
@@ -183,7 +264,7 @@ export function CheckInProvider({ children }: { children: ReactNode }) {
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(notificationState)
 
   useEffect(() => { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(schedules)) }, [schedules])
-  useEffect(() => { window.localStorage.setItem(RESPONSE_KEY, JSON.stringify(responses.slice(0, 50))) }, [responses])
+  useEffect(() => { window.localStorage.setItem(RESPONSE_KEY, JSON.stringify(responses.slice(0, 120))) }, [responses])
   useEffect(() => { window.localStorage.setItem(DELIVERY_KEY, JSON.stringify(deliveries.slice(0, 100))) }, [deliveries])
   useEffect(() => { window.localStorage.setItem(CONTACT_KEY, JSON.stringify(mockContact)) }, [mockContact])
 
@@ -215,11 +296,7 @@ export function CheckInProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const schedule = dueSchedules.find((item) => item.channels.includes('browser') && item.lastNotifiedFor !== item.nextDueAt)
     if (!schedule || notificationPermission !== 'granted' || typeof Notification === 'undefined') return
-
-    const notification = new Notification('Vital Passport check-in', {
-      body: schedule.prompt,
-      tag: `vital-checkin-${schedule.id}`,
-    })
+    const notification = new Notification('Vital Passport check-in', { body: schedule.prompt, tag: `vital-checkin-${schedule.id}` })
     notification.onclick = () => {
       window.focus()
       setActiveScheduleId(schedule.id)
@@ -282,24 +359,34 @@ export function CheckInProvider({ children }: { children: ReactNode }) {
     setActiveScheduleId(null)
   }
 
-  const completeCheckIn = (rawResponse: string) => {
+  const completeCheckIn = ({ response: rawResponse, metrics: rawMetrics }: CheckInSubmission) => {
+    if (!activeSchedule) return
     const response = rawResponse.trim()
-    if (!activeSchedule || !response) return
+    const metrics: CheckInMetrics = {
+      mood: clampScore(rawMetrics.mood),
+      energy: clampScore(rawMetrics.energy),
+      sleep: clampScore(rawMetrics.sleep),
+      pain: clampScore(rawMetrics.pain),
+      stress: clampScore(rawMetrics.stress),
+      symptomSeverity: clampScore(rawMetrics.symptomSeverity),
+      medicationExperience: rawMetrics.medicationExperience,
+    }
     const createdAt = new Date().toISOString()
     const itemId = `checkin-${activeSchedule.id}-${Date.now()}`
+    const summary = [metricSummary(metrics), response].filter(Boolean).join('. ')
     const extraction: HealthExtraction = {
       document_type: 'symptom_note',
       title: `${activeSchedule.title} response`,
-      summary: response,
+      summary,
       event_date: createdAt.slice(0, 10),
       facility: 'Patient scheduled check-in',
       medications: [],
       lab_results: [],
       diagnoses: [],
       instructions: [],
-      symptoms: [response],
+      symptoms: response ? [response] : [],
       follow_up: '',
-      evidence: [{ field: 'Patient check-in', value: response, quote: response, confidence: 1 }],
+      evidence: [{ field: 'Patient check-in', value: summary, quote: summary, confidence: 1 }],
       warnings: [],
       requires_confirmation: true,
       confidence: 1,
@@ -310,7 +397,7 @@ export function CheckInProvider({ children }: { children: ReactNode }) {
       type: 'voice',
       date: 'Today',
       status: 'ready',
-      summary: response,
+      summary,
       extraction,
     }
     queueExtractionFindings(item)
@@ -321,8 +408,9 @@ export function CheckInProvider({ children }: { children: ReactNode }) {
       focus: activeSchedule.focus,
       prompt: activeSchedule.prompt,
       response,
+      metrics,
       createdAt,
-    }, ...current].slice(0, 50))
+    }, ...current].slice(0, 120))
     setSchedules((current) => current.map((schedule) => schedule.id === activeSchedule.id ? {
       ...schedule,
       lastCompletedAt: createdAt,
@@ -353,14 +441,14 @@ export function CheckInProvider({ children }: { children: ReactNode }) {
   }
 
   const resetCheckIns = () => {
-    const seeded = seedSchedules()
-    setSchedules(seeded)
-    setResponses([])
+    setSchedules(seedSchedules())
+    setResponses(seedResponses())
     setDeliveries([])
     setMockContactState(defaultContact)
     setActiveScheduleId(null)
     window.localStorage.removeItem(STORAGE_KEY)
     window.localStorage.removeItem(RESPONSE_KEY)
+    window.localStorage.removeItem('vital-check-in-responses-v1')
     window.localStorage.removeItem(DELIVERY_KEY)
     window.localStorage.removeItem(CONTACT_KEY)
   }
