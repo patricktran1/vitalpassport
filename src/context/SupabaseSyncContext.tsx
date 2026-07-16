@@ -125,6 +125,7 @@ export function SupabaseSyncProvider({ children }: { children: ReactNode }) {
       return
     }
 
+    const client = supabase
     const userId = auth.user.id
     if (window.sessionStorage.getItem(CLOUD_LOADED_USER_KEY) === userId) {
       lastUploadedSignature.current = cloudBundleSignature(captureCloudBundle(snapshot))
@@ -137,7 +138,7 @@ export function SupabaseSyncProvider({ children }: { children: ReactNode }) {
       setStatus('loading')
       setError('')
       try {
-        const result = await loadCloudBundle(supabase, userId)
+        const result = await loadCloudBundle(client, userId)
         if (cancelled) return
         if (!result.bundle) {
           await pushBundle(captureCloudBundle(snapshot))
