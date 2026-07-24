@@ -1,5 +1,8 @@
 # Vital Passport
 
+[![CI](https://github.com/patricktran1/vitalpassport/actions/workflows/ci.yml/badge.svg)](https://github.com/patricktran1/vitalpassport/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/patricktran1/vitalpassport/actions/workflows/codeql.yml/badge.svg)](https://github.com/patricktran1/vitalpassport/actions/workflows/codeql.yml)
+
 **Your health story, ready when it matters.**
 
 Vital Passport is a patient-controlled health intelligence product that turns scattered documents, medication photos, symptoms, labs, and questions into a coherent, source-linked clinician brief.
@@ -147,15 +150,27 @@ npm install
 npm run dev
 ```
 
-Validate a production build with:
+Run the complete local gate with:
 
 ```bash
-npm run check
-npm run build
-node --check api/extract.js
+npm run validate
+npm run test:coverage
 ```
 
-GitHub Actions runs the TypeScript and production builds for every feature branch and pull request.
+`npm run validate` performs TypeScript validation, unit tests, a production Vite build, and server-function syntax checking.
+
+### Automated quality gates
+
+Every pull request and push to `main` runs:
+
+1. TypeScript validation
+2. Deterministic unit tests for patient-profile normalization and date handling
+3. V8 coverage reporting with a retained CI artifact
+4. Production Vite build verification
+5. Server-function syntax validation
+6. CodeQL security analysis
+
+These checks validate software contracts. They do not establish privacy compliance, clinical validity, diagnostic accuracy, or readiness for identifiable patient information.
 
 ## Next technical milestones
 
@@ -164,6 +179,10 @@ GitHub Actions runs the TypeScript and production builds for every feature branc
 3. Caregiver and dependent profiles
 4. Source-file object storage with signed URLs
 5. Security, privacy, regulatory, and clinical-safety hardening
+
+## Contributing
+
+Focused contributions are welcome. Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a pull request.
 
 ## Safety
 
